@@ -31,7 +31,7 @@ from model.utils.net_utils import change_require_gradient, heat_exp, tensor_hold
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 from ipdb import set_trace
-
+from utils import vis_model_output, vis_model_multioutput
 def parse_args():
     """
     Parse input arguments
@@ -227,7 +227,7 @@ if __name__ == '__main__':
                 lr *= cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA
 
             data_iter = iter(dataloader)
-            for _ in trange(iters_per_epoch, desc="Iter", leave=True):
+            for i in trange(iters_per_epoch, desc="Iter", leave=True):
                 tot_step += 1
                 data = next(data_iter)
                 im_data.data.resize_(data[0].size()).copy_(data[0])
@@ -246,8 +246,8 @@ if __name__ == '__main__':
                 rois_label, pooled_feat, cls_score, \
                 rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
                     = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-
-                # cls_prob: (N,nr_roi,21)
+                set_trace()
+                # cls_prob: (N,nr_roi,21); rois: (N,nr_roi,5) 5->(batch_index,x1,y1,x2,y2)
                 RCNN_loss_bbox_distill = 0.0
                 loss_frcn_cls_old = 0.0
                 # if group != 0, then use distillation loss
@@ -258,8 +258,13 @@ if __name__ == '__main__':
                     b_rois_label, b_pooled_feat, b_cls_score, \
                     b_rpn_loss_cls, b_rpn_loss_bbox, b_RCNN_loss_cls, b_RCNN_loss_bbox \
                         = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                    ##### show bbox #####
+                    # vis_model_multioutput(im_path, im_info, rois, bbox_pred, b_rois, b_bbox_pred, cfg)
+                    ##### show rois #####
+                    vis_model_multioutput(im_path, im_info, rois, torch.zeros_like(bbox_pred), b_rois, torch.zeros_like(b_bbox_pred), cfg)
                     # ??? b_faster rcnn和faster rcnn之间的box是怎么对应上的？？？
-
+                    # vis_model_output(im_info, rois, bbox_pred, cfg)
+                    # TODO: draw bbox_pred and b_bbox_pred and give index...
                     if cfg.CIOD.SWITCH_DO_IN_RPN: # !RPN[feature distillation + cls cross entropy]
                         # RPN binary classification loss
                         # Less-forgetting Learning in Deep Neural Networks (Equ 1)

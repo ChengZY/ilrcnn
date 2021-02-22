@@ -29,7 +29,7 @@ from model.utils.config import cfg, cfg_from_file, get_output_dir, cfg_fix
 from model.utils.net_utils import vis_detections, tensor_holder
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
-
+from ipdb import set_trace
 
 def parse_args():
     """
@@ -75,9 +75,10 @@ if __name__ == '__main__':
     np.random.seed(cfg.RNG_SEED)
     args.imdb_name = "voc_{}_trainval".format(args.dataset)
     args.imdbval_name = "voc_{}_test".format(args.dataset)
-    cfg_from_file("cfgs/{}{}.yml".format(args.net, "_ls" if args.large_scale else ""))
-    if args.config_file:
-        cfg_from_file(args.config_file)
+    # cfg_from_file("cfgs/{}{}.yml".format(args.net, "_ls" if args.large_scale else ""))
+    cfg_from_file("cfgs/{}".format(args.config_file))
+    # if args.config_file:
+    #     cfg_from_file(args.config_file)
 
     cfg.TRAIN.USE_FLIPPED = False
     cfg_fix()
@@ -158,7 +159,7 @@ if __name__ == '__main__':
 
             cls_score = cls_score[:, :now_cls_high].contiguous()
             bbox_pred = bbox_pred[..., :now_cls_high * 4].contiguous()
-            if args.no_repr:
+            if args.no_repr: # T
                 cls_prob = torch.zeros_like(cls_score)
                 cls_prob = F.softmax(cls_score, dim=-1)
                 scores = cls_prob.view(im_data.size(0), rois.size(1), -1).data
@@ -175,7 +176,7 @@ if __name__ == '__main__':
 
             boxes = rois.data[:, :, 1:5]
 
-            if cfg.TEST.BBOX_REG:
+            if cfg.TEST.BBOX_REG: # T
                 # Apply bounding-box regression deltas
                 box_deltas = bbox_pred.data
                 if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
@@ -197,7 +198,7 @@ if __name__ == '__main__':
             else:
                 # Simply repeat the boxes, once for each class
                 pred_boxes = np.tile(boxes, (1, scores.shape[1]))
-
+            # set_trace()
             pred_boxes /= data[1][0][2]
 
             scores = scores.squeeze()
@@ -237,9 +238,9 @@ if __name__ == '__main__':
                         all_boxes[j][i] = all_boxes[j][i][keep, :]
 
             if args.vis:
-                cv2.imwrite('result.png', im2show)
-                # cv2.imshow('test', im2show)
-                # cv2.waitKey(0)
+                # cv2.imwrite('result.png', im2show)
+                cv2.imshow('test', im2show)
+                cv2.waitKey(0)
 
         save_name = 'faster_rcnn_10'
         output_dir = get_output_dir(imdb, save_name)
@@ -249,7 +250,9 @@ if __name__ == '__main__':
         tqdm.write('Evaluating detections')
         ap = imdb.evaluate_detections(all_boxes, output_dir)
         aps.append(ap)
-
+    # aps: [list1, list2, list3, list4] , len1:len2:len3:len4->5,10,15,20
+    #set_trace()
+    # 输出每个stage训练下每个类的AP以及mAP
     print("{0} RCNN {1} set Summary (mAP, AP, %) {2} NEW {0}".format(
         "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group, x in enumerate(aps):
@@ -259,7 +262,7 @@ if __name__ == '__main__':
         for y in x[:now_classes_high]:
             print("{:.2f}\t".format(y * 100), end="")
         print()
-
+    # 输出每个stage训练下该group的mAP变化值
     print("{0} RCNN {1} set Group Summary (mAP, AP, %) NEW {2}{0}".format(
         "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group in range(cfg.CIOD.GROUPS):

@@ -63,10 +63,10 @@ class _RPN(nn.Module):
 
         rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
         rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, dim=1)
-        rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
+        rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out) # (N,2*9,Wo,Ho)
 
         # get rpn offsets to the anchor boxes
-        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)
+        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1) # (N,4*9,Wo,Ho): 9代表每个loc多少个anchor
 
         # proposal layer
         cfg_key = 'TRAIN' if self.training else 'TEST'
@@ -88,7 +88,7 @@ class _RPN(nn.Module):
             rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2)
             rpn_label = rpn_data[0].view(batch_size, -1)
 
-            rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1))
+            rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1)) # filter rpn_label=-1's roi
             rpn_cls_score = torch.index_select(rpn_cls_score.view(-1, 2), 0, rpn_keep)
             rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
             rpn_label = Variable(rpn_label.long())

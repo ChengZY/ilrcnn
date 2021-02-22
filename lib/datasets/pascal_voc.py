@@ -19,7 +19,7 @@ from model.utils.config import cfg
 from . import ds_utils
 from .imdb import imdb
 from .voc_eval import voc_eval
-
+from ipdb import set_trace
 # --------------------------------------------------------
 # Fast R-CNN
 # Copyright (c) 2015 Microsoft
@@ -235,7 +235,6 @@ class pascal_voc(imdb):
             diffc = obj.find('difficult')
             difficult = 0 if diffc == None else int(diffc.text)
             ishards[ix] = difficult
-
             cls = self._class_to_ind[obj.find('name').text.lower().strip()]
             boxes[ix, :] = [x1, y1, x2, y2]
             gt_classes[ix] = cls

@@ -6,7 +6,7 @@ from random import random
 
 from easydict import EasyDict
 from xmltodict import parse
-
+from ipdb import set_trace
 cfg = EasyDict({
     "cache_enable": False,
     "base_dir": os.path.join('data', 'VOCdevkit2007', 'VOC2007'),
@@ -16,15 +16,10 @@ cfg = EasyDict({
     "max_pic_tra": 20000,
     "max_pic_val": 20000,
     "label_names": [
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-        "tennis racket", "bottle",
-        "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-        "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed",
-        "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
-        "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+        'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
+        'bus', 'car', 'cat', 'chair', 'cow',
+        'diningtable', 'dog', 'horse', 'motorbike', 'person',
+        'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
     ],
     "nb_groups": 4,
     "lucky": 0.
@@ -36,10 +31,10 @@ txt_base = os.path.join(cfg.base_dir, 'ImageSets', 'Main')
 ann_base = os.path.join(cfg.base_dir, 'Annotations')
 
 
-def prepare(filename):
+def prepare(filename): # trainval / test
     print("Prepare", filename)
     ids = [x.strip() for x in open(os.path.join(txt_base, filename + ".txt"))]
-    mem = {}
+    mem = {} # 存每个image name中存在的categories
     for line in ids:
         anno_path = os.path.join(ann_base, '{}.xml'.format(line))
         anno = parse(open(anno_path).read())['annotation']
@@ -50,12 +45,13 @@ def prepare(filename):
             continue
         objs = objs if isinstance(objs, list) else [objs]
         obj_cls = [cfg.label_names.index(o['name']) for o in objs]
-        mem[line] = set(obj_cls)
+        mem[line] = set(obj_cls) # 
     print("Prepare", "OK", "Images", "{}/{}".format(len(mem), len(ids)))
     return mem
 
 
 def sel(mem, pic_max, cls_low, cls_hig, lucky=0., nop_limit=1000):
+    # set_trace()
     counter_batch = Counter()
     remain = set(list(range(cls_low, cls_hig)))
     result = []
@@ -64,9 +60,10 @@ def sel(mem, pic_max, cls_low, cls_hig, lucky=0., nop_limit=1000):
 
     while len(remain) or (len(result) < pic_max and do_nothing < nop_limit and len(lines)):
         do_nothing += 1
-        line = lines.pop(0)
+        line = lines.pop(0) # pop the first element in list
         objs = mem[line]
-
+        # 下面这个loop保证了一个image中有且仅有[cls_low,cls_hig] class id之间的image才会被挑选加入到results中
+        # 只不过这种循环遍历的思路很不好。。有点蠢？
         for item in objs:
             if (item >= cls_hig) or (item < cls_low and random() >= lucky):  # 1. Class range
                 lines.append(line)
@@ -96,7 +93,7 @@ if cfg.cache_enable:
     else:
         data = pickle.load(open(cache, "rb"))
 else:
-    data = {stage: prepare(cfg["imdb_{}".format(stage)]) for stage in sets_name}
+    data = {stage: prepare(cfg["imdb_{}".format(stage)]) for stage in sets_name} # 
 
 total_file = {stage: [] for stage in sets_name}
 
@@ -109,11 +106,12 @@ for group in range(cfg.nb_groups):
 
     for stage in sets_name:
         print(stage.capitalize())
+        # set_trace()
         files, counter_g, data[stage] = sel(data[stage], cfg["max_pic_{}".format(stage)], sta, fin,
                                             lucky=1. if 'val' == stage else cfg.lucky, nop_limit=cfg.nop_limit)
-
+        # 得到的files看起来像是只包含class id在[sta,fin]之间的image name
         total_file[stage] += files
-        counter[stage].update(counter_g)
+        counter[stage].update(counter_g) # 对该stage中的class id的image数计数：Counter({2: 296, 0: 203, 3: 127, 1: 62, 4: 57})
 
         if 'val' == stage:
             print(len(total_file[stage]), len(counter[stage]), counter[stage])

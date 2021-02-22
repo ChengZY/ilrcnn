@@ -77,7 +77,7 @@ class _fasterRCNN(nn.Module):
             if cfg.CROP_RESIZE_WITH_MAX_POOL:
                 pooled_feat = F.max_pool2d(pooled_feat, 2, 2)
         elif cfg.POOLING_MODE == 'align':
-            pooled_feat = self.RCNN_roi_align(base_feat, rois.view(-1, 5))
+            pooled_feat = self.RCNN_roi_align(base_feat, rois.view(-1, 5)) # (N*128, 512,7,7)
         elif cfg.POOLING_MODE == 'pool':
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
 
@@ -86,16 +86,17 @@ class _fasterRCNN(nn.Module):
 
         # compute bbox offset
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
-        bbox_raw = bbox_pred
-        if self.training and not self.class_agnostic:
+        bbox_raw = bbox_pred # (N*nr_rois,4*nr_class)
+        if self.training and not self.class_agnostic: # T
             # select the corresponding columns according to roi labels
-            bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
+            # 根据roi_labels的结果来获取该class label下的预测坐标
+            bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4) # (N*nr_rois,21,4)
             bbox_pred_select = torch.gather(bbox_pred_view, 1,
                                             rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
             bbox_pred = bbox_pred_select.squeeze(1)
 
         # compute object classification probability
-        cls_score = self.RCNN_cls_score(pooled_feat)
+        cls_score = self.RCNN_cls_score(pooled_feat) # fc层
         cls_prob = F.softmax(cls_score, dim=-1)
 
         RCNN_loss_cls = 0
