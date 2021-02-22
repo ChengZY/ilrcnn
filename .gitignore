@@ -1,4 +1,9 @@
-data/*
 *.pyc
 *~
 .idea/
+*/**/__pycache__
+__pycache__
+logs/
+output/
+results/
+data/

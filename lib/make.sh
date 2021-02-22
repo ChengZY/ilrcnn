@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 
+# export CXXFLAGS="-std=c++11"
+# export CFLAGS="-std=c99"
+
+# CUDA_PATH=/usr/local/cuda/bin
+# export PATH=$PATH:${CUDA_PATH}
+
+export CUDA_PATH=/usr/local/cuda/
 export CXXFLAGS="-std=c++11"
 export CFLAGS="-std=c99"
 
-CUDA_PATH=/usr/local/cuda/bin
-export PATH=$PATH:${CUDA_PATH}
+export PATH=/usr/local/cuda-9.0/bin${PATH:+:${PATH}}
+export CPATH=/usr/local/cuda-9.0/include${CPATH:+:${CPATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-9.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
 
 PYTHON=python3
 

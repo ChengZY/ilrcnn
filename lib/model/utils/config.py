@@ -91,10 +91,12 @@ __C.TRAIN.TRIM_HEIGHT = 600
 __C.TRAIN.TRIM_WIDTH = 600
 
 # Images to use per minibatch
-__C.TRAIN.IMS_PER_BATCH = 1
+__C.TRAIN.IMS_PER_BATCH = 2 # no use, replace by BATCH_SIZE
 
 # Minibatch size (number of regions of interest [ROIs])
 __C.TRAIN.BATCH_SIZE = 128
+# Minibatch size multiple coefficient (in order to limit the memory)
+__C.TRAIN.BATCH_SIZE_MULTIPLE = 3
 
 # Fraction of minibatch that is labeled foreground (i.e. class > 0)
 __C.TRAIN.FG_FRACTION = 0.25
@@ -444,4 +446,5 @@ def cfg_fix():
     __C.CLASSES = tuple(['__background__'] + __C.CLASSES)
     __C.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
     __C.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
-    __C.TRAIN.BATCH_SIZE = max(1, torch.cuda.device_count()) * 3
+    __C.TRAIN.BATCH_SIZE = max(1, torch.cuda.device_count()) * __C.TRAIN.BATCH_SIZE_MULTIPLE
+    assert __C.TRAIN.BATCH_SIZE_MULTIPLE >= 3

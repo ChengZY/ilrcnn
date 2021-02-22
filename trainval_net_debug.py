@@ -62,6 +62,7 @@ def parse_args():
     # Other config to override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
     parser.add_argument('--vis', dest='vis', action='store_true', help='Visualization mode')
+    parser.add_argument('--d', dest='debug', action='store_true', help='Debug mode')
     return parser.parse_args()
 
 
@@ -189,10 +190,10 @@ if __name__ == '__main__':
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
         set_learning_rate(optimizer, lr)
-        if group:
-            if cfg.CIOD.SWITCH_DO_IN_RPN and cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
+        if group: # 当group>0时，rpn_cls_score的conv的w/d freeze
+            if cfg.CIOD.SWITCH_DO_IN_RPN and cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER: # T
                 set_learning_rate(optimizer, 0.0, rpn_cls_params_index)
-            if cfg.CIOD.SWITCH_FREEZE_BASE_NET:
+            if cfg.CIOD.SWITCH_FREEZE_BASE_NET: # F
                 set_learning_rate(optimizer, 1e-6, base_net_params_index)
         fasterRCNN.train()
 
@@ -230,9 +231,9 @@ if __name__ == '__main__':
             data_iter = iter(dataloader)
             for i in trange(iters_per_epoch, desc="Iter", leave=True):
                 tot_step += 1
-                if args.vis:
-                    if i > 15:
-                        break
+                # if args.vis or args.debug:
+                #     if i > 15:
+                #         break
                 data = next(data_iter)
                 im_data.data.resize_(data[0].size()).copy_(data[0])
                 im_info.data.resize_(data[1].size()).copy_(data[1])
@@ -308,15 +309,22 @@ if __name__ == '__main__':
                                 loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
                             elif cfg.CIOD.DISTILL_METHOD == 'mse':
                                 loss_frcn_cls_old += F.mse_loss(pred_old, label_old)
-                            elif cfg.CIOD.DISTILL_METHOD == 'no':
-                                pass
                             else:
                                 raise KeyError("Unknown distill method")
+                            # set_trace()
                         # set_trace()
                         # For new classes, use cross entropy loss # group_cls_arr[group] 遍历当前的new class
                         label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1) # !由于只截取了new class的score，所以需要把labels的索引往前挪
                         pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
                         loss_frcn_cls_new = F.cross_entropy(pred_new, label_new)
+                        print("*" * 10, "old model pred", "*" * 10)
+                        print(np.argmax(b_cls_score.cpu().data,axis=1).tolist())
+                        print("*" * 10, "new model pred", "*" * 10)
+                        print(np.argmax(cls_score.cpu().data,axis=1).tolist())
+                        print("*" * 10, "rois_label", "*" * 10)
+                        print(rois_label.cpu().data.tolist())
+                        if i > 130:
+                            set_trace()
 
                         # Process class 0 (__background__)
                         # If it is background class, we do not want to change it too much

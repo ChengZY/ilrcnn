@@ -45,6 +45,11 @@ Then, we select pictures for each group in the whole dataset, forming `image gro
 
 We can do it using `select_pic.py`.
 
+### Use shell script
+```
+CUDA_VISIBLE_DEVICES=0,1,2,3 ./runall.sh 1000
+```
+
 ### Train
 
 ```
