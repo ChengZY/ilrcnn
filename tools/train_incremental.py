@@ -195,7 +195,7 @@ def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
     # number of iteration to store parameter value in pth file
     checkpoint_period = cfg_target.SOLVER.CHECKPOINT_PERIOD
 
-    # train the model
+    # train the model using overwrite function
     do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
              device, checkpoint_period, arguments_source, arguments_target, summary_writer)
 
@@ -244,8 +244,26 @@ def test(cfg_target, model, distributed):
 
 
 def main():
-    source_model_config_file = "/home/maskrcnn-benchmark/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml"
-    target_model_config_file = "/home/maskrcnn-benchmark/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml"
+    parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
+    parser.add_argument(
+        "--src-file",
+        default="",
+        metavar="SRC_FILE",
+        help="path to src config file",
+        type=str,
+    )
+    parser.add_argument(
+        "--tat-file",
+        default="",
+        metavar="TAT_FILE",
+        help="path to target config file",
+        type=str,
+    )
+    args = parser.parse_args()
+    # source_model_config_file = "/home/zhengkai/Faster-ILOD/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml"
+    # target_model_config_file = "/home/zhengkai/Faster-ILOD/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml"
+    source_model_config_file = args.src_file
+    target_model_config_file = args.tat_file
     # source_model_config_file = "/home/maskrcnn-benchmark/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model_COCO.yaml"
     # target_model_config_file = "/home/maskrcnn-benchmark/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model_COCO.yaml"
     local_rank = 0
@@ -257,9 +275,17 @@ def main():
 
     cfg_source = cfg.clone()
     cfg_source.merge_from_file(source_model_config_file)
+    subset = source_model_config_file.split('/')[2]
+    yaml_name = source_model_config_file.split('/')[3]
+    cfg_source.OUTPUT_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset, "source")
+    cfg_source.TENSORBOARD_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
     cfg_source.freeze()
     cfg_target = cfg.clone()
     cfg_target.merge_from_file(target_model_config_file)
+    subset = target_model_config_file.split('/')[2]
+    yaml_name = target_model_config_file.split('/')[3]
+    cfg_target.OUTPUT_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset, "source")
+    cfg_target.TENSORBOARD_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
     cfg_target.freeze()
 
     output_dir_target = cfg_target.OUTPUT_DIR

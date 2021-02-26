@@ -172,11 +172,12 @@ def calculate_feature_distillation_loss(source_features, target_features, loss=N
 
 
 def calculate_roi_distillation_losses(model_source, model_target, images):
-
+    # using maskrcnn_benchmark/modeling/detector/generalize_rcnn.py
     # --- calculate roi-subnet classification and bbox regression distillation loss ---
     # do test on the pre-trained frozen source model to get the soften label
+    # softenn_proposal: 选取的64个高分proposal, feature_proposals：用于distillation的top-5的proposals
     soften_result, soften_proposal, feature_source, backbone_feature_source, anchor_source, rpn_output_source, feature_proposals = \
-        model_source.generate_soften_proposal(images)
+        model_source.generate_soften_proposal(images) # 重写generalized_rcnn的forward模式，生成source model的结果
 
     # use soften proposal and soften result to calculate distillation loss
     # 'num_of_distillation_categories' = number of categories for source model including background

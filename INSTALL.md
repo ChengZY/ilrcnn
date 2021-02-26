@@ -52,9 +52,9 @@ cd apex
 python setup.py install --cuda_ext --cpp_ext
 
 # install PyTorch Detection
-cd $INSTALL_DIR
-git clone https://github.com/facebookresearch/maskrcnn-benchmark.git
-cd maskrcnn-benchmark
+# cd $INSTALL_DIR
+# git clone https://github.com/facebookresearch/maskrcnn-benchmark.git
+# cd maskrcnn-benchmark
 
 # the following will install the lib with
 # symbolic links, so that you can modify

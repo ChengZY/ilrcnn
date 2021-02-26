@@ -143,7 +143,9 @@ class FastRCNNLossComputation(object):
         regression_targets = cat(
             [proposal.get_field("regression_targets") for proposal in proposals], dim=0
         )
-
+        # if (labels>=20).sum().item() > 0:
+        #     print(labels)
+        #     from ipdb import set_trace; set_trace()
         classification_loss = F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for the corresponding ground truth labels, to be used
@@ -171,14 +173,14 @@ def make_roi_box_loss_evaluator(cfg):
         cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,
         cfg.MODEL.ROI_HEADS.BG_IOU_THRESHOLD,
         allow_low_quality_matches=False,
-    )
+    ) # 用于匹配proposal和gt box
 
     bbox_reg_weights = cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS
-    box_coder = BoxCoder(weights=bbox_reg_weights)
+    box_coder = BoxCoder(weights=bbox_reg_weights) # 用于对box编码成regressable的格式
 
     fg_bg_sampler = BalancedPositiveNegativeSampler(
         cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE, cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
-    )
+    ) # 用于确保pos/neg的比例
 
     cls_agnostic_bbox_reg = cfg.MODEL.CLS_AGNOSTIC_BBOX_REG
 

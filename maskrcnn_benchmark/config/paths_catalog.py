@@ -48,7 +48,7 @@ class DatasetCatalog(object):
             "ann_file": "coco/annotations/person_keypoints_valminusminival2014.json",
         },
         "voc_2007_train": {
-            "data_dir": "DATA/VOC2007",
+            "data_dir": "datasets/voc/VOC2007",
             "split": "train"
         },
         "voc_2007_train_cocostyle": {
@@ -56,7 +56,7 @@ class DatasetCatalog(object):
             "ann_file": "voc/VOC2007/Annotations/pascal_train2007.json"
         },
         "voc_2007_val": {
-            "data_dir": "DATA/VOC2007",
+            "data_dir": "datasets/voc/VOC2007",
             "split": "val"
         },
         "voc_2007_val_cocostyle": {
@@ -64,7 +64,7 @@ class DatasetCatalog(object):
             "ann_file": "voc/VOC2007/Annotations/pascal_val2007.json"
         },
         "voc_2007_test": {
-            "data_dir": "DATA/VOC2007",
+            "data_dir": "datasets/voc/VOC2007",
             "split": "test"
         },
         "voc_2007_test_cocostyle": {

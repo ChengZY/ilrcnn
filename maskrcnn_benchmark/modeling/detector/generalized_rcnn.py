@@ -64,6 +64,7 @@ class GeneralizedRCNN(nn.Module):
         (proposals, proposal_losses), anchors, rpn_output = self.rpn(images, features, targets)
 
         if self.roi_heads:
+            # feature map, proposals, losses
             x, result, detector_losses = self.roi_heads(features, proposals, targets)
 
         else:
@@ -131,7 +132,7 @@ class GeneralizedRCNN(nn.Module):
         else:
             list = range(0, 128, 1)
             selected_proposal_index = random.sample(list, 64)
-
+        # 获得选择的box的coord和score
         for i, element in enumerate(selected_proposal_index):
             if i == 0:
                 selected_proposal_bbox = proposal_bbox[element]
@@ -161,7 +162,8 @@ class GeneralizedRCNN(nn.Module):
         feature_proposals.add_field("objectness", feature_proposal_score)
         feature_proposals = [feature_proposals]
 
-        # generate soften proposal labels
+        # generate soften proposal labels using maskrcnn_bennchmark/modeling/roi_heads/box_head/box_head.py
+        # soften_scores, soften_bboxes分别为heads的logits输出
         soften_scores, soften_bboxes = self.roi_heads.calculate_soften_label(features, selected_proposals, targets)  # use ROI-subnet to generate final results
 
         return (soften_scores, soften_bboxes), selected_proposals, features, backbone_features, anchors, rpn_output, feature_proposals
@@ -199,7 +201,7 @@ class GeneralizedRCNN(nn.Module):
         soften_scores, soften_bboxes = soften_results
         images = to_image_list(images)
         features, backbone_features = self.backbone(images.tensors)  # extra image features from backbone network
-        target_scores, target_bboxes = self.roi_heads.calculate_soften_label(features, soften_proposals, soften_results)
+        target_scores, target_bboxes = self.roi_heads.calculate_soften_label(features, soften_proposals, soften_results) # roi head的输出
         num_of_distillation_categories = soften_scores.size()[1]
 
         # compute distillation loss
@@ -221,7 +223,8 @@ class GeneralizedRCNN(nn.Module):
         elif cls_preprocess == 'normalization':
             class_wise_soften_scores_avg = torch.mean(soften_scores, dim=1).view(-1, 1)
             class_wise_target_scores_avg = torch.mean(target_scores, dim=1).view(-1, 1)
-            normalized_soften_scores = torch.sub(soften_scores, class_wise_soften_scores_avg)
+            # 对各自的score进行归一化
+            normalized_soften_scores = torch.sub(soften_scores, class_wise_soften_scores_avg) # 和正常的 - 运算符一样
             normalized_target_scores = torch.sub(target_scores, class_wise_target_scores_avg)
             modified_soften_scores = normalized_target_scores[:, : num_of_distillation_categories]  # include background
             modified_target_scores = normalized_soften_scores[:, : num_of_distillation_categories]  # include background

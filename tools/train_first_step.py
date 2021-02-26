@@ -22,6 +22,8 @@ from maskrcnn_benchmark.utils.miscellaneous import mkdir  # related to folder cr
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
+# import sys
+# sys.path.append('/home/zhengkai/apex')
 try:
     from apex import amp
 except ImportError:
@@ -198,6 +200,11 @@ def main():
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    # from ipdb import set_trace; set_trace()
+    subset = args.config_file.split('/')[2]
+    yaml_name = args.config_file.split('/')[3]
+    cfg.OUTPUT_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset)
+    cfg.TENSORBOARD_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset, "tensorboard")
     cfg.freeze()
 
     output_dir = cfg.OUTPUT_DIR

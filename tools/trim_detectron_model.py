@@ -17,9 +17,18 @@ parser.add_argument(
     help="path to save the converted model",
     type=str,
 )
+parser.add_argument(
+    "--config-file",
+    default="",
+    help="path to config file",
+    type=str,
+)
 
 args = parser.parse_args()
-
+subset = args.config_file.split('/')[2]
+yaml_name = args.config_file.split('/')[3]
+args.pretrained_path = os.path.join("./incremental_learning_ResNet50_C4/", subset, "model_final.pth")
+args.save_path = os.path.join("./incremental_learning_ResNet50_C4/", subset, "model_trim_optimizer_iteration.pth")
 PRETRAINED_PATH = os.path.expanduser(args.pretrained_path)
 print('pretrained model path: {}'.format(PRETRAINED_PATH))
 

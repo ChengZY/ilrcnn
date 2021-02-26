@@ -17,13 +17,14 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 
 
 class PascalVOCDataset(torch.utils.data.Dataset):
-    """
-    CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
-               "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
-    """
-    CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
-               "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
 
+    CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
+               "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
+    """
+    如果挑选出来的new class有在old class之前的，则需要手动调整CLASSES，去掉new class
+    CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
+               "diningtable", "dog", "horse", "motorbike", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
+    """
     def __init__(self, data_dir, split, use_difficult=False, transforms=None, external_proposal=False, old_classes=[],
                  new_classes=[], excluded_classes=[], is_train=True):
         self.root = data_dir
@@ -110,12 +111,15 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         self.id_to_img_map = {k: v for k, v in enumerate(self.final_ids)}
         cls = PascalVOCDataset.CLASSES
         self.class_to_ind = dict(zip(cls, range(len(cls))))
-
+        # from ipdb import set_trace; set_trace()
     def _load_img_from_NEW_cls_without_old_data(self):
+        """
+        根据yml中指定的new class data按照类别从class_train.txt中取，把图片id放到img_ids_per_category和ids中
+        """
         self.ids = []
         for incremental in self.new_classes:  # read corresponding class images from the data set
             img_ids_per_category = []
-            with open(self._imgsetpath % "{0}_{1}".format(incremental, self.image_set)) as f:
+            with open(self._imgsetpath % "{0}_{1}".format(incremental, self.image_set)) as f: # ./voc/VOC2007/ImageSets/Main/cat_train.txt
                 buff = f.readlines()
                 buff = [x.strip("\n") for x in buff]
 
@@ -127,7 +131,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
                 elif x[2] == '0':  # include difficult level object
                     if self.is_train:
                         pass
-                    else:
+                    else: # 测试的时候才用difficult level的object
                         img_ids_per_category.append(x[0])
                         self.ids.append(x[0])
                 else:
@@ -136,6 +140,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
             print('voc.py | load_img_from_NEW_cls_without_old_data | number of images in {0}_{1} set: {2}'.format(incremental, self.image_set, len(img_ids_per_category)))
 
             # check for image ids repeating
+            # 由于是按照类别取的img id（一张图中可能存在两个object），会被多个class loop重复取，所以要去重
             self.final_ids = []
             for id in self.ids:
                 repeat_flag = False
@@ -145,13 +150,13 @@ class PascalVOCDataset(torch.utils.data.Dataset):
                         break
                 if not repeat_flag:
                     self.final_ids.append(id)
-            print('voc.py | load_img_from_NEW_and_OLD_cls_without_old_data | total used number of images in {0}: {1}'.format(self.image_set, len(self.final_ids)))
+            print('voc.py | load_img_from_NEW_cls_without_old_data | total used number of images in {0}: {1}'.format(self.image_set, len(self.final_ids)))
 
         # store image ids and class ids
         self.id_to_img_map = {k: v for k, v in enumerate(self.final_ids)}
         cls = PascalVOCDataset.CLASSES
         self.class_to_ind = dict(zip(cls, range(len(cls))))
-
+        # from ipdb import set_trace; set_trace()
     def __getitem__(self, index):
         img_id = self.final_ids[index]
         img = Image.open(self._imgpath % img_id).convert("RGB")
@@ -159,7 +164,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         target = self.get_groundtruth(index)
         target = target.clip_to_image(remove_empty=True)
 
-        if self.use_external_proposal:
+        if self.use_external_proposal: # F
             proposal = self.get_proposal(index)
             proposal = proposal.clip_to_image(remove_empty=True)
         else:
@@ -228,7 +233,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
             if not self.keep_difficult and difficult:
                 continue
             name = obj.find("name").text.lower().strip()
-
+            # 如果该图片中的gt box是old class/exclude class，则不添加到gt box的list中
             old_class_flag = False
             for old in self.old_classes:
                 if name == old:
@@ -247,9 +252,11 @@ class PascalVOCDataset(torch.utils.data.Dataset):
             bndbox = tuple(map(lambda x: x - TO_REMOVE, list(map(int, box))))
 
             if exclude_class_flag:
-                print('voc.py | incremental train | object category belongs to exclude categoires: {0}'.format(name))
+                # print('voc.py | incremental train | object category belongs to exclude categoires: {0}'.format(name))
+                pass
             elif self.is_train and old_class_flag:
-                print('voc.py | incremental train | object category belongs to old categoires: {0}'.format(name))
+                # print('voc.py | incremental train | object category belongs to old categoires: {0}'.format(name))
+                pass
             else:
                 boxes.append(bndbox)
                 gt_classes.append(self.class_to_ind[name])

@@ -13,10 +13,10 @@ class CombinedROIHeads(torch.nn.ModuleDict):
     """
 
     def __init__(self, cfg, heads):
-        super(CombinedROIHeads, self).__init__(heads)
+        super(CombinedROIHeads, self).__init__(heads) # 往ModuleDict中注册放入key-value
         self.cfg = cfg.clone()
         if cfg.MODEL.MASK_ON and cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
-            self.mask.feature_extractor = self.box.feature_extractor
+            self.mask.feature_extractor = self.box.feature_extractor # ??? 用self.box居然能访问ModuleDict中的元素
         if cfg.MODEL.KEYPOINT_ON and cfg.MODEL.ROI_KEYPOINT_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             self.keypoint.feature_extractor = self.box.feature_extractor
 
