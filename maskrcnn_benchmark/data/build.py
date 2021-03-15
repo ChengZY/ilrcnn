@@ -156,7 +156,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, ext
     for dataset in datasets:
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
         batch_sampler = make_batch_data_sampler(dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter)
-        collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
+        collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY) # 用于把一个batch的数据转换成ImageList格式
         num_workers = cfg.DATALOADER.NUM_WORKERS
         data_loader = torch.utils.data.DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=collator) # num_workers=num_workers,
         data_loaders.append(data_loader)

@@ -183,7 +183,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
     def get_groundtruth(self, index):
         img_id = self.final_ids[index]
         anno = ET.parse(self._annopath % img_id).getroot()
-        anno = self._preprocess_annotation(anno)
+        anno = self._preprocess_annotation(anno) # {'boxes': tensor, "labels": tensor, "difficult": tensor, "im_info":xx}
 
         height, width = anno["im_info"]
         self._img_height = height
