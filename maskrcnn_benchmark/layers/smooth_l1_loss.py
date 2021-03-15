@@ -22,12 +22,11 @@ def smooth_l1_loss_weight(input, target, beta=1. / 9, size_average=True, weight=
     very similar to the smooth_l1_loss from pytorch, but with
     the extra beta parameter
     """
-    from ipdb import set_trace; set_trace()
     # print('smooth_l1_loss.py | input size: {0}'.format(input.size()))
+    # from ipdb import set_trace; set_trace()
     n = torch.abs(input - target)
     cond = n < beta
-    loss = torch.where(cond, 0.5 * n ** 2 / beta, n - 0.5 * beta)
+    loss = torch.where(cond, 0.5 * n ** 2 / beta, n - 0.5 * beta) * weight[:, None]
     if size_average:
         return loss.mean()
     return loss.sum()
-    # return loss

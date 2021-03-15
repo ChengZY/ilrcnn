@@ -40,13 +40,13 @@ class ROIBoxHead(torch.nn.Module):
             # Faster R-CNN subsamples during training the proposals with a fixed positive / negative ratio
             with torch.no_grad():
                 proposals = self.loss_evaluator.subsample(proposals, targets)
-
+        # from ipdb import set_trace; set_trace()
         # extract features that will be fed to the final classifier. The
         # feature_extractor generally corresponds to the pooler + heads
         x = self.feature_extractor(features, proposals)
 
         # final classifier that converts the features into predictions
-        class_logits, box_regression = self.predictor(x)
+        class_logits, box_regression = self.predictor(x) # two images's concat result output
 
         if not self.training:
             result = self.post_processor((class_logits, box_regression), proposals)

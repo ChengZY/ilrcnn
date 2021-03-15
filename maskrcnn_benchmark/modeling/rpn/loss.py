@@ -108,7 +108,7 @@ class RPNLossComputation(object):
             matched_result.append(matched_idxs)
             # 如果在入口文件中 给BoxList添加了scores
             if matched_targets.has_field('scores'):
-                weight_result.append(matched_targets.has_field('scores'))
+                weight_result.append(matched_targets.get_field('scores'))
             # set_trace()
         if matched_targets.has_field('scores'):
             return labels, regression_targets, overlap_result, matched_result, weight_result
@@ -133,6 +133,7 @@ class RPNLossComputation(object):
             labels, regression_targets, overlap_result, matched_result = targets_result
         else:
             labels, regression_targets, overlap_result, matched_result, weight_result = targets_result
+
         # print('rpn | loss.py | call | labels size : {0}'.format(labels[0].size()))
         # print('rpn | loss.py | call | regression_targets size : {0}'.format(regression_targets[0].size()))
         # print('rpn | loss.py | call | overlap_result size : {0}'.format(overlap_result[0].size()))
@@ -193,7 +194,6 @@ class RPNLossComputation(object):
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
 
-        # from ipdb import set_trace; set_trace()
         if len(targets_result) == 4:
             box_loss = smooth_l1_loss(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False) / (sampled_inds.numel())
         else: # 返回了weight，需要计算weight loss
@@ -201,15 +201,17 @@ class RPNLossComputation(object):
             box_loss = smooth_l1_loss_weight(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False, weight=weight_result[sampled_pos_inds]) / (sampled_inds.numel())
             
         # print('rpn | loss.py | call | box_loss : {0}'.format(box_loss))
-
+        # from ipdb import set_trace; set_trace()
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds], weight=None, size_average=None, reduce=None, reduction='none')
+        if len(targets_result) == 5:
+            objectness_loss = objectness_loss * weight_result[sampled_inds]
         original_objectness_loss = torch.mean(objectness_loss)
+
         # print('rpn | loss.py | call | original_objectness_loss : {0}'.format(original_objectness_loss))
         
         # scaled_objectness_loss = objectness_loss * scaled_weight
         # scaled_objectness_loss = torch.mean(scaled_objectness_loss)
         # print('rpn | loss.py | call | scaled_objectness_loss : {0}'.format(scaled_objectness_loss))
-
         return original_objectness_loss, box_loss
 
 

@@ -10,7 +10,7 @@ from maskrcnn_benchmark.modeling.balanced_positive_negative_sampler import (
     BalancedPositiveNegativeSampler
 )
 from maskrcnn_benchmark.modeling.utils import cat
-
+from maskrcnn_benchmark.layers import smooth_l1_loss_weight
 
 class FastRCNNLossComputation(object):
     """
@@ -40,7 +40,12 @@ class FastRCNNLossComputation(object):
         match_quality_matrix = boxlist_iou(target, proposal)
         matched_idxs = self.proposal_matcher(match_quality_matrix)
         # Fast RCNN only need "labels" field for selecting the targets
-        target = target.copy_with_fields("labels")
+        # target = target.copy_with_fields("labels")
+        # @zk copy more items
+        if target.has_field("scores"):
+            target = target.copy_with_fields(["labels", "scores"])
+        else:
+            target = target.copy_with_fields("labels")
         # get the targets corresponding GT for each proposal
         # NB: need to clamp the indices because we can have a single
         # GT in the image, and matched_idxs can be -2, which goes
@@ -52,6 +57,7 @@ class FastRCNNLossComputation(object):
     def prepare_targets(self, proposals, targets):
         labels = []
         regression_targets = []
+        weight_result = []
         for proposals_per_image, targets_per_image in zip(proposals, targets):
             matched_targets = self.match_targets_to_proposals(
                 proposals_per_image, targets_per_image
@@ -76,7 +82,11 @@ class FastRCNNLossComputation(object):
 
             labels.append(labels_per_image)
             regression_targets.append(regression_targets_per_image)
-
+            if matched_targets.has_field('scores'): 
+                weight_result.append(matched_targets.get_field('scores'))
+            # from ipdb import set_trace; set_trace()
+        if targets[0].has_field('scores'):
+            return labels, regression_targets, weight_result
         return labels, regression_targets
 
     def subsample(self, proposals, targets):
@@ -89,19 +99,32 @@ class FastRCNNLossComputation(object):
             proposals (list[BoxList])
             targets (list[BoxList])
         """
+        if targets[0].has_field("scores"):
+            labels, regression_targets, weight_result = self.prepare_targets(proposals, targets)
+        else:
+            labels, regression_targets = self.prepare_targets(proposals, targets)
 
-        labels, regression_targets = self.prepare_targets(proposals, targets)
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
 
         proposals = list(proposals)
         # add corresponding label and regression_targets information to the bounding boxes
-        for labels_per_image, regression_targets_per_image, proposals_per_image in zip(
-            labels, regression_targets, proposals
-        ):
-            proposals_per_image.add_field("labels", labels_per_image)
-            proposals_per_image.add_field(
-                "regression_targets", regression_targets_per_image
-            )
+        if targets[0].has_field("scores"):
+            for labels_per_image, regression_targets_per_image, proposals_per_image, weight_per_image in zip(
+                labels, regression_targets, proposals, weight_result
+            ):
+                proposals_per_image.add_field("labels", labels_per_image)
+                proposals_per_image.add_field(
+                    "regression_targets", regression_targets_per_image
+                )
+                proposals_per_image.add_field("weight", weight_per_image)
+        else:
+            for labels_per_image, regression_targets_per_image, proposals_per_image in zip(
+                labels, regression_targets, proposals
+            ):
+                proposals_per_image.add_field("labels", labels_per_image)
+                proposals_per_image.add_field(
+                    "regression_targets", regression_targets_per_image
+                )
 
         # distributed sampled proposals, that were obtained on all feature maps
         # concatenated via the fg_bg_sampler, into individual feature map levels
@@ -130,7 +153,7 @@ class FastRCNNLossComputation(object):
         """
         # print('box_head | loss.py | class_logits size {0}'.format(class_logits[0].size()))
         # print('box_head | loss.py | box_regression size {0}'.format(box_regression[0].size()))
-        class_logits = cat(class_logits, dim=0)
+        class_logits = cat(class_logits, dim=0) # efficient version
         box_regression = cat(box_regression, dim=0)
         device = class_logits.device
 
@@ -138,31 +161,46 @@ class FastRCNNLossComputation(object):
             raise RuntimeError("subsample needs to be called before")
 
         proposals = self._proposals
-
+        # from ipdb import set_trace; set_trace()
         labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
         regression_targets = cat(
             [proposal.get_field("regression_targets") for proposal in proposals], dim=0
         )
+
         # if (labels>=20).sum().item() > 0:
         #     print(labels)
-        #     from ipdb import set_trace; set_trace()
-        classification_loss = F.cross_entropy(class_logits, labels)
-
+        # from ipdb import set_trace; set_trace()
+        # classification_loss = F.cross_entropy(class_logits, labels)
+        classification_loss = F.cross_entropy(class_logits, labels, reduction='none')
+        if proposals[0].has_field("weight"):
+            weight_result = cat([proposal.get_field("weight") for proposal in proposals], dim=0)
+            classification_loss = classification_loss * weight_result
+        classification_loss = torch.mean(classification_loss)
         # get indices that correspond to the regression targets for the corresponding ground truth labels, to be used
         # with advanced indexing
         sampled_pos_inds_subset = torch.nonzero(labels > 0).squeeze(1)
         labels_pos = labels[sampled_pos_inds_subset]
-        if self.cls_agnostic_bbox_reg:
+        if self.cls_agnostic_bbox_reg: # F 只分辨含目标与不含目标两类
             map_inds = torch.tensor([4, 5, 6, 7], device=device)
-        else:
+        else: # 获得含有目标的边框在对应box_regression中的索引
             map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
+        # from ipdb import set_trace; set_trace()
 
-        box_loss = smooth_l1_loss(
-            box_regression[sampled_pos_inds_subset[:, None], map_inds],
-            regression_targets[sampled_pos_inds_subset],
-            size_average=False,  # sum
-            beta=1,
-        )
+        if proposals[0].has_field("weight"):
+            box_loss = smooth_l1_loss_weight(
+                box_regression[sampled_pos_inds_subset[:, None], map_inds],
+                regression_targets[sampled_pos_inds_subset],
+                size_average=False,  # sum
+                beta=1,
+                weight=weight_result[sampled_pos_inds_subset],
+            )    
+        else:
+            box_loss = smooth_l1_loss(
+                box_regression[sampled_pos_inds_subset[:, None], map_inds],
+                regression_targets[sampled_pos_inds_subset],
+                size_average=False,  # sum
+                beta=1,
+            )
         box_loss = box_loss / labels.numel()
 
         return classification_loss, box_loss
