@@ -13,6 +13,7 @@ from ..balanced_positive_negative_sampler import BalancedPositiveNegativeSampler
 from ..utils import cat
 
 from maskrcnn_benchmark.layers import smooth_l1_loss
+from maskrcnn_benchmark.layers import smooth_l1_loss_weight
 from maskrcnn_benchmark.modeling.matcher import Matcher
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
@@ -72,12 +73,13 @@ class RPNLossComputation(object):
         regression_targets = []
         overlap_result = []
         matched_result = []
+        weight_result = []
         for anchors_per_image, targets_per_image in zip(anchors, targets): # 循环从每一张图片中读取anchor和gt,然后进行处理
             # 得到与各个锚点对应的gt, 所有anchor与所有gt之间的IoU matrix
             matched_targets, matched_quality_matrix = self.match_targets_to_anchors(anchors_per_image, targets_per_image, self.copied_fields)
             # 得到与各个锚点对应的gt的索引
             matched_idxs = matched_targets.get_field("matched_idxs")
-            
+
             # 得到与各个锚点对应的gt的标签列表，其中０为舍弃，１为有用边框
             labels_per_image = self.generate_labels_func(matched_targets)
             labels_per_image = labels_per_image.to(dtype=torch.float32)
@@ -104,7 +106,12 @@ class RPNLossComputation(object):
             regression_targets.append(regression_targets_per_image)
             overlap_result.append(matched_quality_matrix)
             matched_result.append(matched_idxs)
-
+            # 如果在入口文件中 给BoxList添加了scores
+            if matched_targets.has_field('scores'):
+                weight_result.append(matched_targets.has_field('scores'))
+            # set_trace()
+        if matched_targets.has_field('scores'):
+            return labels, regression_targets, overlap_result, matched_result, weight_result
         return labels, regression_targets, overlap_result, matched_result
 
     def __call__(self, anchors, objectness, box_regression, targets):
@@ -120,7 +127,12 @@ class RPNLossComputation(object):
             box_loss (Tensor
         """
         anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in anchors] # 分别将每一个图片的不同FPN层中生成的锚点合并起来
-        labels, regression_targets, overlap_result, matched_result = self.prepare_targets(anchors, targets)
+        #labels, regression_targets, overlap_result, matched_result = self.prepare_targets(anchors, targets)
+        targets_result = self.prepare_targets(anchors, targets)
+        if len(targets_result) == 4:
+            labels, regression_targets, overlap_result, matched_result = targets_result
+        else:
+            labels, regression_targets, overlap_result, matched_result, weight_result = targets_result
         # print('rpn | loss.py | call | labels size : {0}'.format(labels[0].size()))
         # print('rpn | loss.py | call | regression_targets size : {0}'.format(regression_targets[0].size()))
         # print('rpn | loss.py | call | overlap_result size : {0}'.format(overlap_result[0].size()))
@@ -181,7 +193,13 @@ class RPNLossComputation(object):
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
 
-        box_loss = smooth_l1_loss(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False) / (sampled_inds.numel())
+        # from ipdb import set_trace; set_trace()
+        if len(targets_result) == 4:
+            box_loss = smooth_l1_loss(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False) / (sampled_inds.numel())
+        else: # 返回了weight，需要计算weight loss
+            weight_result = torch.cat(weight_result, dim=0)
+            box_loss = smooth_l1_loss_weight(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False, weight=weight_result[sampled_pos_inds]) / (sampled_inds.numel())
+            
         # print('rpn | loss.py | call | box_loss : {0}'.format(box_loss))
 
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds], weight=None, size_average=None, reduce=None, reduction='none')

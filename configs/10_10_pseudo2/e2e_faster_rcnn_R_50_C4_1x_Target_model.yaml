@@ -42,5 +42,5 @@ SOLVER:
   MOMENTUM: 0.9
 TEST: # testing strategy
   IMS_PER_BATCH: 1 # number of images per batch
-OUTPUT_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_pseudo2" # path to store the result
-TENSORBOARD_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_pseudo2/tensorboard"
+OUTPUT_DIR: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_pseudo2" # path to store the result
+TENSORBOARD_DIR: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_pseudo2/tensorboard"

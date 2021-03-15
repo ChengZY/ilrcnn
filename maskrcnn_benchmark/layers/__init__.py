@@ -12,7 +12,7 @@ from .roi_align import ROIAlign
 from .roi_align import roi_align
 from .roi_pool import ROIPool
 from .roi_pool import roi_pool
-from .smooth_l1_loss import smooth_l1_loss
+from .smooth_l1_loss import smooth_l1_loss, smooth_l1_loss_weight
 from .sigmoid_focal_loss import SigmoidFocalLoss
 from .dcn.deform_conv_func import deform_conv, modulated_deform_conv
 from .dcn.deform_conv_module import DeformConv, ModulatedDeformConv, ModulatedDeformConvPack
@@ -43,5 +43,6 @@ __all__ = [
     'DeformRoIPooling',
     'DeformRoIPoolingPack',
     'ModulatedDeformRoIPoolingPack',
+    'smooth_l1_loss_weight',
 ]
 
