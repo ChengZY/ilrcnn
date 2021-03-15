@@ -114,7 +114,7 @@ def main():
     parser.add_argument(
         "--confidence-threshold",
         type=float,
-        default=0.2,
+        default=0.7,
         help="Minimum score for the prediction to be shown",
     )
     parser.add_argument(
@@ -196,6 +196,16 @@ def main():
     imgpath = os.path.join(ROOT, "JPEGImages", "%s.jpg")
     imgsetpath = os.path.join(ROOT, "ImageSets", "Main", "%s.txt")
 
+
+    """
+    统计10_10的数据分类中，后者包含前者的class的instance数量（即被missing掉的old ann个数）
+    """
+    image_set = 'train'
+    stat_groundtruth(new_class, old_class, imgsetpath, image_set, annopath)
+
+
+    """
+    # 可视化new model和old model在old class上的表现
     category = "cow"
     image_set = "val"
 
@@ -230,9 +240,69 @@ def main():
         if cv2.waitKey(0) == 27: # 'ESC'
             cv2.destroyAllWindows() 
             exit(0)
+    """
 
-    # load testing data
+def stat_groundtruth(new_classes, old_classes, imgsetpath, image_set, annopath):
+    """
+    取new class的image，把image加入到list中，如果存在就不再次stat；否则：
+    - 看该image中old instance的个数
+    """
+    obj_classes = new_classes + old_classes
+    train_img = []
+    has_old_img = []
+    has_old = 0
+    obj_cnt = 0
+    total_old_cnt = 0
+    max_old_cnt_perimg = 0
+    min_old_cnt_perimg = 999999
+    for x in new_classes:
+        print("Processing class: ", x)
+        with open(imgsetpath % "{}_{}".format(x, image_set)) as f:
+            buff = f.readlines()
+        # img_per_categories = []
+        buff = [x.strip("\n") for x in buff]
+        # 对每张图片
+        for i in range(len(buff)):
+            has_old_flag = False
+            a = buff[i]
+            b = a.split(' ')
 
+            if b[0] in train_img: # 如果已经统计过了，则跳过
+                continue
+
+            if b[1] == '-1': pass # not contain this category object
+            elif b[1] == '0': train_img.append(b[0]) # if difficult level
+            else: train_img.append(b[0])
+
+            ## 统计已经存在的new data中old instance的数量
+            anno = ET.parse(annopath % b[0]).getroot()
+            # 遍历每个object
+            old_cnt = 0
+            for obj in anno.iter("object"):
+                difficult = int(obj.find("difficult").text) == 1
+                if difficult: # 若为difficult则不统计该instance
+                    continue
+                name = obj.find("name").text.lower().strip()
+                if name in old_classes:
+                    old_cnt += 1
+                    has_old_flag = True
+                if name in obj_classes:
+                    obj_cnt += 1
+            total_old_cnt += old_cnt
+            max_old_cnt_perimg = max(max_old_cnt_perimg, old_cnt)
+            min_old_cnt_perimg = min(min_old_cnt_perimg, old_cnt)
+            
+            if has_old_flag:
+                if b[0] not in has_old_img:
+                    has_old_img.append(b[0])
+    
+    print('*' * 30)
+    print("training image number: ", len(train_img))
+    print("training image number(has old instance): ", len(has_old_img))
+    print("old instance/ total instance: {}/{}".format(total_old_cnt, obj_cnt))
+    print("max/min old instance number for one image: {}/{}".format(max_old_cnt_perimg, min_old_cnt_perimg))
+                
+        
 
 
 def get_groundtruth(img_name, annopath, old_classes, new_classes, exclude_classes=[]):
@@ -308,7 +378,7 @@ class VOCDemo(object):
         self.confidence_threshold = confidence_threshold
         self.cpu_device = torch.device("cpu")
         self.is_old = is_old
-        self.color = (0,205,0) if self.is_old else (0,0,255)
+        self.color = (0,205,0) if self.is_old else (250,0,0) # 如果是old model, green
         self.thickness = 2 # 2 if self.is_old else 1
 
     def build_transform(self):

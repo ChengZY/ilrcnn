@@ -35,7 +35,7 @@ def calculate_rpn_distillation_loss(rpn_output_source, rpn_output_target, cls_lo
                 final_rpn_cls_distillation_loss.append(torch.mean(rpn_distillation_loss))
                 del filter
                 torch.cuda.empty_cache()  # Release unoccupied memory
-            elif cls_loss == 'filtered_l2':
+            elif cls_loss == 'filtered_l2': # T
                 rpn_objectness_difference = current_source_rpn_objectness - current_target_rpn_objectness
                 objectness_difference.append(rpn_objectness_difference)
                 filter = torch.zeros(current_source_rpn_objectness.size()).to('cuda')
@@ -96,7 +96,7 @@ def calculate_rpn_distillation_loss(rpn_output_source, rpn_output_target, cls_lo
             current_objectness_mask[current_objectness_difference <= bbox_threshold] = 0
             masked_source_rpn_bbox = current_source_rpn_bbox * current_objectness_mask
             masked_target_rpn_bbox = current_target_rpn_bbox * current_objectness_mask
-            if bbox_loss == 'l2':
+            if bbox_loss == 'l2': # T
                 current_bbox_distillation_loss = l2_loss(masked_source_rpn_bbox, masked_target_rpn_bbox)
                 final_rpn_bbs_distillation_loss.append(torch.mean(torch.mean(torch.sum(current_bbox_distillation_loss, dim=2), dim=1), dim=0))
             elif bbox_loss == 'l1':
@@ -176,6 +176,7 @@ def calculate_roi_distillation_losses(model_source, model_target, images):
     # --- calculate roi-subnet classification and bbox regression distillation loss ---
     # do test on the pre-trained frozen source model to get the soften label
     # softenn_proposal: 选取的64个高分proposal, feature_proposals：用于distillation的top-5的proposals
+    # rpn_output_source: (objectness, rpn_box_regression) => (是否为bg/fg的conf, rpn对该anchor的reg值?)
     soften_result, soften_proposal, feature_source, backbone_feature_source, anchor_source, rpn_output_source, feature_proposals = \
         model_source.generate_soften_proposal(images) # 重写generalized_rcnn的forward模式，生成source model的结果
 

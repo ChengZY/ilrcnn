@@ -220,7 +220,7 @@ class GeneralizedRCNN(nn.Module):
             target_scores = F.log_softmax(target_scores)
             modified_soften_scores = soften_scores[:, : num_of_distillation_categories]  # include background
             modified_target_scores = target_scores[:, : num_of_distillation_categories]  # include background
-        elif cls_preprocess == 'normalization':
+        elif cls_preprocess == 'normalization': # T
             class_wise_soften_scores_avg = torch.mean(soften_scores, dim=1).view(-1, 1)
             class_wise_target_scores_avg = torch.mean(target_scores, dim=1).view(-1, 1)
             # 对各自的score进行归一化
@@ -234,7 +234,7 @@ class GeneralizedRCNN(nn.Module):
         else:
             raise ValueError("Wrong preprocessing method for raw classification output")
 
-        if cls_loss == 'l2':
+        if cls_loss == 'l2': # T
             l2_loss = nn.MSELoss(size_average=False, reduce=False)
             class_distillation_loss = l2_loss(modified_soften_scores, modified_target_scores)
             class_distillation_loss = torch.mean(torch.mean(class_distillation_loss, dim=1), dim=0)  # average towards categories and proposals
@@ -261,7 +261,7 @@ class GeneralizedRCNN(nn.Module):
         # compute distillation bbox loss
         modified_soften_boxes = soften_bboxes[:, 1:, :]  # exclude background bbox
         modified_target_bboxes = target_bboxes[:, 1:num_of_distillation_categories, :]  # exclude background bbox
-        if bbs_loss == 'l2':
+        if bbs_loss == 'l2': # T
             l2_loss = nn.MSELoss(size_average=False, reduce=False)
             bbox_distillation_loss = l2_loss(modified_target_bboxes, modified_soften_boxes)
             bbox_distillation_loss = torch.mean(torch.mean(torch.sum(bbox_distillation_loss, dim=2), dim=1), dim=0)  # average towards categories and proposals
