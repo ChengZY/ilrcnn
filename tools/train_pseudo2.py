@@ -44,6 +44,7 @@ except ImportError:
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 from torchvision.transforms import functional as F
+from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 CATEGORIES = ["__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
             "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
@@ -83,12 +84,22 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             """
             pred_scores = pred.get_field("scores")
             CONFIDENCE_THRESH = 0.7
+            IOU_THRESH = 0.5
             keep = torch.nonzero(pred_scores > CONFIDENCE_THRESH).squeeze(1)
             pred = pred[keep]
-            pred_scores = pred_scores.tolist()
-            pred_labels = pred.get_field("labels") # .tolist()
-            pred_boxes = pred.bbox.data
-            #set_trace()
+            
+            with torch.no_grad():
+                if len(pred) > 0:
+                    iou_matrix = boxlist_iou(pred, gt)
+                    max_iou = iou_matrix.max(dim=1)[0]
+                    # set_trace()
+                    keep2 = torch.nonzero(max_iou < IOU_THRESH).squeeze(1)
+                    pred = pred[keep2]
+
+            pred_scores = pred.get_field("scores").tolist() # update pred scores
+            pred_labels = pred.get_field("labels") # .tolist() # update pred labels
+            pred_boxes = pred.bbox.data # update pred bbox
+
             merge_boxes = torch.cat([gt.bbox, pred_boxes], dim=0)
             gt.bbox = merge_boxes
             gt.extra_fields['labels'] = torch.cat([gt.extra_fields['labels'], pred_labels], dim=0)
