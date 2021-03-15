@@ -201,7 +201,7 @@ class BoxList(object):
                 v = v.to(device)
             bbox.add_field(k, v)
         return bbox
-
+    # 把类别转成了可迭代的对象，所以bbox和field是一致的
     def __getitem__(self, item):
         bbox = BoxList(self.bbox[item], self.size, self.mode)
         for k, v in self.extra_fields.items():

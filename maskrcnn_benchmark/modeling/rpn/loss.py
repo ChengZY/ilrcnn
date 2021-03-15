@@ -51,8 +51,9 @@ class RPNLossComputation(object):
         matched_idxs = self.proposal_matcher(match_quality_matrix)  # [num of bounding box]
         # print('rpn | loss.py | match_targets_to_anchors | matched_idxs size : {0}'.format(matched_idxs.size()))
 
-        # RPN doesn't need any fields from target for creating the labels, so clear them all
-        target = target.copy_with_fields(copied_fields)
+        # RPN doesn't need any fields from target for creating the labels, so clear them all by createing a BoxList without empty fields
+        ## comment below line to keep all the fields
+        # target = target.copy_with_fields(copied_fields)
 
         # get the targets corresponding GT for each anchor
         # need to clamp the indices because we can have a single GT in the image, and matched_idxs can be -2, which goes out of bounds
@@ -60,7 +61,7 @@ class RPNLossComputation(object):
         # print('rpn | loss.py | match_targets_to_anchors | matched_targets : {0}'.format(matched_targets))
 
         matched_targets.add_field("matched_idxs", matched_idxs)
-
+        # from ipdb import set_trace; set_trace()
         return matched_targets, match_quality_matrix
     """
     - 获得锚点(anchor)的标签：-1为要舍弃的，０为背景，其余的为对应的gt。
@@ -76,6 +77,7 @@ class RPNLossComputation(object):
             matched_targets, matched_quality_matrix = self.match_targets_to_anchors(anchors_per_image, targets_per_image, self.copied_fields)
             # 得到与各个锚点对应的gt的索引
             matched_idxs = matched_targets.get_field("matched_idxs")
+            
             # 得到与各个锚点对应的gt的标签列表，其中０为舍弃，１为有用边框
             labels_per_image = self.generate_labels_func(matched_targets)
             labels_per_image = labels_per_image.to(dtype=torch.float32)
@@ -185,7 +187,7 @@ class RPNLossComputation(object):
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds], weight=None, size_average=None, reduce=None, reduction='none')
         original_objectness_loss = torch.mean(objectness_loss)
         # print('rpn | loss.py | call | original_objectness_loss : {0}'.format(original_objectness_loss))
-
+        
         # scaled_objectness_loss = objectness_loss * scaled_weight
         # scaled_objectness_loss = torch.mean(scaled_objectness_loss)
         # print('rpn | loss.py | call | scaled_objectness_loss : {0}'.format(scaled_objectness_loss))
