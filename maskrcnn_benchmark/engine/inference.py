@@ -32,7 +32,8 @@ def compute_on_dataset(model, data_loader, device, timer=None, external_proposal
             if external_proposal:  # use external proposals
                 output = model.use_external_proposals_edgeboxes(images, proposals)
             else:
-                output, features = model(images)
+                output, features = model(images) # output-> list(BoxList)
+                # from ipdb import set_trace; set_trace()
             if timer:
                 torch.cuda.synchronize()
                 timer.toc()
@@ -77,6 +78,7 @@ def inference(model, data_loader, dataset_name, iou_types=("bbox",), box_only=Fa
     inference_timer = Timer()
     total_timer.tic()
     predictions = compute_on_dataset(model, data_loader, device, inference_timer, external_proposal)
+    # from ipdb import set_trace; set_trace()
     # wait for all processes to complete before measuring the time
     synchronize()
     total_time = total_timer.toc()

@@ -46,14 +46,14 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
             model_state_dict[key] = loaded_state_dict[key_old]
         else:
             new_size = list(model_state_dict[key].size())
-            print('model_serialization.py | new | size of {0}: {1}'.format(key, new_size))
+            # print('model_serialization.py | new | size of {0}: {1}'.format(key, new_size))
             loaded_size = list(loaded_state_dict[key_old].size())
-            print('model_serialization.py | loaded | size of {0}: {1}'.format(key, loaded_size))
+            # print('model_serialization.py | loaded | size of {0}: {1}'.format(key, loaded_size))
 
-            print('model_serialization.py | new | value of {0}: {1}'.format(key, model_state_dict[key]))
-            print('model_serialization.py | loaded | value of {0}: {1}'.format(key_old, loaded_state_dict[key_old]))
+            # print('model_serialization.py | new | value of {0}: {1}'.format(key, model_state_dict[key]))
+            # print('model_serialization.py | loaded | value of {0}: {1}'.format(key_old, loaded_state_dict[key_old]))
             model_state_dict[key][:loaded_size[0]] = loaded_state_dict[key_old]
-            print('model_serialization.py | after loading, new | value of {0}: {1}'.format(key, model_state_dict[key]))
+            # print('model_serialization.py | after loading, new | value of {0}: {1}'.format(key, model_state_dict[key]))
 
         # used for logging
         logger.info(log_str_template.format(key, max_size, key_old, max_size_loaded, tuple(loaded_state_dict[key_old].shape)))

@@ -50,6 +50,7 @@ except ImportError:
     raise ImportError('Use APEX for multi-precision via apex.amp')
 
 import warnings
+from collections import Counter
 from ipdb import set_trace
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -186,10 +187,21 @@ def main():
     )
 
     # load 10_10 dataset
+    # old_class = ["aeroplane", "bicycle", "bird", "boat", "bottle",
+    #             "bus", "car", "cat", "chair", "cow"]
+    # new_class = ["diningtable", "dog", "horse", "motorbike", "person",
+    #             "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+    # load 15_5 dataset
     old_class = ["aeroplane", "bicycle", "bird", "boat", "bottle",
-                "bus", "car", "cat", "chair", "cow"]
-    new_class = ["diningtable", "dog", "horse", "motorbike", "person",
-                "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+                "bus", "car", "cat", "chair", "cow", "diningtable", 
+                "dog", "horse", "motorbike", "pottedplant"]
+    new_class = ["sheep", "sofa", "train", "tvmonitor", "person"]
+    # load 19_1 dataset
+    # old_class = ["aeroplane", "bicycle", "bird", "boat", "bottle",
+    #             "bus", "car", "cat", "chair", "cow", "diningtable", 
+    #             "dog", "horse", "motorbike", "pottedplant", 
+    #             "sheep", "sofa", "train", "tvmonitor"]
+    # new_class = ["person",]
 
     ROOT = "/home/zhengkai/maskrcnn-benchmark/datasets/voc/VOC2007"
     annopath = os.path.join(ROOT, "Annotations", "%s.xml")
@@ -250,6 +262,7 @@ def stat_groundtruth(new_classes, old_classes, imgsetpath, image_set, annopath):
     obj_classes = new_classes + old_classes
     train_img = []
     has_old_img = []
+    inst = []
     has_old = 0
     obj_cnt = 0
     total_old_cnt = 0
@@ -270,7 +283,7 @@ def stat_groundtruth(new_classes, old_classes, imgsetpath, image_set, annopath):
             if b[0] in train_img: # 如果已经统计过了，则跳过
                 continue
 
-            if b[1] == '-1': pass # not contain this category object
+            if b[1] == '-1': continue # not contain this category object
             elif b[1] == '0': train_img.append(b[0]) # if difficult level
             else: train_img.append(b[0])
 
@@ -288,21 +301,34 @@ def stat_groundtruth(new_classes, old_classes, imgsetpath, image_set, annopath):
                     has_old_flag = True
                 if name in obj_classes:
                     obj_cnt += 1
+                inst.append(name)
             total_old_cnt += old_cnt
             max_old_cnt_perimg = max(max_old_cnt_perimg, old_cnt)
             min_old_cnt_perimg = min(min_old_cnt_perimg, old_cnt)
             
             if has_old_flag:
-                if b[0] not in has_old_img:
+                if not (b[0] in has_old_img):
                     has_old_img.append(b[0])
-    
+        # from ipdb import set_trace; set_trace()
     print('*' * 30)
     print("training image number: ", len(train_img))
     print("training image number(has old instance): ", len(has_old_img))
     print("old instance/ total instance: {}/{}".format(total_old_cnt, obj_cnt))
     print("max/min old instance number for one image: {}/{}".format(max_old_cnt_perimg, min_old_cnt_perimg))
-                
-        
+
+    inst_cnt = Counter(inst)      
+    print("Instance Statistics")
+    # from ipdb import set_trace; set_trace()
+    # print(inst_cnt)
+    tpt = "{}:\t {}\t"
+    print("======= OLD SET =========")
+    for x in old_classes:
+        num = inst_cnt[x] if x in inst_cnt.keys() else 0
+        print(tpt.format(x, num))
+    print("======= NEW SET =========")
+    for x in new_classes:
+        num = inst_cnt[x] if x in inst_cnt.keys() else 0
+        print(tpt.format(x, num))
 
 
 def get_groundtruth(img_name, annopath, old_classes, new_classes, exclude_classes=[]):

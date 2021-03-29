@@ -25,7 +25,7 @@ class RPNLossComputation(object):
     """
 
     def __init__(self, proposal_matcher, fg_bg_sampler, box_coder,
-                 generate_labels_func):
+                 generate_labels_func, has_weight=True, cfg=None):
         """
         Arguments:
             proposal_matcher (Matcher)
@@ -39,6 +39,8 @@ class RPNLossComputation(object):
         self.copied_fields = []
         self.generate_labels_func = generate_labels_func # 标签生成函数，用以生成锚点对应的基准边框的索引: generate_rpn_labels
         self.discard_cases = ['not_visibility', 'between_thresholds'] # 指定需要放弃的锚点类型
+        self.has_weight = has_weight
+        self.cfg = cfg
 
     def match_targets_to_anchors(self, anchor, target, copied_fields=[]):
         # print('rpn | loss.py | match_targets_to_anchors | anchor : {0}'.format(anchor))
@@ -76,7 +78,8 @@ class RPNLossComputation(object):
         weight_result = []
         for anchors_per_image, targets_per_image in zip(anchors, targets): # 循环从每一张图片中读取anchor和gt,然后进行处理
             # 得到与各个锚点对应的gt, 所有anchor与所有gt之间的IoU matrix
-            matched_targets, matched_quality_matrix = self.match_targets_to_anchors(anchors_per_image, targets_per_image, self.copied_fields)
+            matched_targets, matched_quality_matrix = self.match_targets_to_anchors(
+                anchors_per_image, targets_per_image, self.copied_fields)
             # 得到与各个锚点对应的gt的索引
             matched_idxs = matched_targets.get_field("matched_idxs")
 
@@ -102,7 +105,7 @@ class RPNLossComputation(object):
             # compute regression targets 计算每张图片中，所有锚点与其对应基准边框之间的偏差
             regression_targets_per_image = self.box_coder.encode(matched_targets.bbox, anchors_per_image.bbox)
             # 将标签信息和边框回归信息保存到最开始初始化的列表里
-            labels.append(labels_per_image)
+            labels.append(labels_per_image) # -1,0,1 labels
             regression_targets.append(regression_targets_per_image)
             overlap_result.append(matched_quality_matrix)
             matched_result.append(matched_idxs)
@@ -194,16 +197,19 @@ class RPNLossComputation(object):
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
 
-        if len(targets_result) == 4:
+        if len(targets_result) == 4 or (not self.has_weight):
             box_loss = smooth_l1_loss(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False) / (sampled_inds.numel())
         else: # 返回了weight，需要计算weight loss
             weight_result = torch.cat(weight_result, dim=0)
+            # new_weight = (1-low_bound) / (1-confidence_treshold)*(weight-1) + 1
+            weight_result = (weight_result - 1.) * \
+                (1. - self.cfg.MODEL.LOW_BOUND) / (1. - self.cfg.MODEL.PSEUDO_CONF_THRESH) + 1.
             box_loss = smooth_l1_loss_weight(box_regression[sampled_pos_inds], regression_targets[sampled_pos_inds], beta=1.0/9, size_average=False, weight=weight_result[sampled_pos_inds]) / (sampled_inds.numel())
             
         # print('rpn | loss.py | call | box_loss : {0}'.format(box_loss))
         # from ipdb import set_trace; set_trace()
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds], weight=None, size_average=None, reduce=None, reduction='none')
-        if len(targets_result) == 5:
+        if len(targets_result) == 5 and self.has_weight:
             objectness_loss = objectness_loss * weight_result[sampled_inds]
         original_objectness_loss = torch.mean(objectness_loss)
 
@@ -225,5 +231,6 @@ def generate_rpn_labels(matched_targets):
 def make_rpn_loss_evaluator(cfg, box_coder):
     matcher = Matcher(cfg.MODEL.RPN.FG_IOU_THRESHOLD, cfg.MODEL.RPN.BG_IOU_THRESHOLD, allow_low_quality_matches=True)
     fg_bg_sampler = BalancedPositiveNegativeSampler(cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE, cfg.MODEL.RPN.POSITIVE_FRACTION)
-    loss_evaluator = RPNLossComputation(matcher, fg_bg_sampler, box_coder, generate_rpn_labels)
+    has_weight = cfg.MODEL.RPN.HAS_WEIGHT
+    loss_evaluator = RPNLossComputation(matcher, fg_bg_sampler, box_coder, generate_rpn_labels, has_weight, cfg)
     return loss_evaluator

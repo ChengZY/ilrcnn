@@ -2,7 +2,7 @@
 # CUDA_VISIBLE_DEVICES=3 ./train.sh ./configs/19_1_again/e2e_faster_rcnn_R_50_C4_1x.yaml
 echo "train.sh YML"
 nr_gpu=1
-ims_per_gpu=3 # 必须是1，否则会报错
+ims_per_gpu=1 # 必须是1，否则会报错
 ims_per_batch=`expr $nr_gpu \* $ims_per_gpu`
 fpn_post_nms_top_n_train=`expr 1000 \* $ims_per_gpu`
 
@@ -30,8 +30,6 @@ set -x
 #     SOLVER.IMS_PER_BATCH $ims_per_batch
 
 # python tools/trim_detectron_model.py \
-   # --config-file $YML
-#    --pretrained_path /home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/RPN_19_classes_40k_steps_no_person/model_final.pth \
-#    --save_path /home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/RPN_19_classes_40k_steps_no_person/model_trim_optimizer_iteration.pth
+#    --config-file $YML
 
 python tools/train_incremental.py --src-file $SRC_YML --tat-file $TAT_YML

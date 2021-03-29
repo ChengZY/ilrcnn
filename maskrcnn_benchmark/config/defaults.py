@@ -25,9 +25,29 @@ _C.MODEL.RPN_ONLY = False
 _C.MODEL.MASK_ON = False
 _C.MODEL.RETINANET_ON = False
 _C.MODEL.KEYPOINT_ON = False
+_C.MODEL.PROTO_ON = False
+_C.MODEL.HIDDEN_DIM = 128
+_C.MODEL.QLEN = 256
+_C.MODEL.CONTRAST_IOU_THRES = 0.5
+_C.MODEL.TEMPERATURE = 0.2
+_C.MODEL.REWEIGHT_TYPE = 'none' # 'identity'
+_C.MODEL.LAMB_CONTRAST = 0.5
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
 _C.MODEL.CLS_AGNOSTIC_BBOX_REG = False
+_C.MODEL.PSEUDO_IOU_THRESH = 0.5
+_C.MODEL.PSEUDO_CONF_THRESH = 0.7
+_C.MODEL.PSEUDO_WEIGHT = 1.
+_C.MODEL.PSEUDO_CLASS_AGNOSTIC = False # set pseudo with specific labels or fg labels only
+_C.MODEL.LOW_BOUND = _C.MODEL.PSEUDO_CONF_THRESH
+_C.MODEL.LABEL_TYPE = "hard" # ["soft", "label"]
+_C.MODEL.SOFT_WEIGHT = 2.
+_C.MODEL.SOFT_AUTO_WEIGHT = False
+
+# Faster-ILOD distillation ablation
+_C.MODEL.ROI_DISTILL = True
+_C.MODEL.RPN_DISTILL = True
+_C.MODEL.FEAT_DISTILL = True
 
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for
 # the path in paths_catalog. Else, it will use it as the specified absolute
@@ -185,7 +205,7 @@ _C.MODEL.RPN.CONV_FREEZE = False
 _C.MODEL.RPN.CLS_FREEZE = False
 # Whether freeze the RPN bounding box regression layer
 _C.MODEL.RPN.BBS_FREEZE = False
-
+_C.MODEL.RPN.HAS_WEIGHT = True
 
 # ---------------------------------------------------------------------------- #
 # ROI HEADS options
@@ -227,10 +247,12 @@ _C.MODEL.ROI_HEADS.SCORE_THRESH = 0.05
 # Overlap threshold used for non-maximum suppression (suppress boxes with
 # IoU >= this threshold)
 _C.MODEL.ROI_HEADS.NMS = 0.5
+
 # Maximum number of detections to return per image (100 is based on the limit
 # established for the COCO dataset)
 _C.MODEL.ROI_HEADS.DETECTIONS_PER_IMG = 100
 
+_C.MODEL.ROI_HEADS.HAS_WEIGHT = True
 
 _C.MODEL.ROI_BOX_HEAD = CN()
 _C.MODEL.ROI_BOX_HEAD.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"
@@ -244,6 +266,9 @@ _C.MODEL.ROI_BOX_HEAD.NAME_OLD_CLASSES = []
 _C.MODEL.ROI_BOX_HEAD.NAME_NEW_CLASSES = []
 _C.MODEL.ROI_BOX_HEAD.NAME_EXCLUDED_CLASSES = []
 
+_C.MODEL.ROI_BOX_HEAD.SPLIT = ""
+_C.MODEL.ROI_BOX_HEAD.INCREMENTAL = False
+
 # Hidden layer dimension when using an MLP for the RoI box head
 _C.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM = 1024
 # GN
@@ -252,7 +277,9 @@ _C.MODEL.ROI_BOX_HEAD.USE_GN = False
 _C.MODEL.ROI_BOX_HEAD.DILATION = 1
 _C.MODEL.ROI_BOX_HEAD.CONV_HEAD_DIM = 256
 _C.MODEL.ROI_BOX_HEAD.NUM_STACKED_CONVS = 4
-
+# soft nms
+_C.MODEL.ROI_BOX_HEAD.NMS_TYPE = "nms" # ['nms', 'soft_nms']
+_C.MODEL.ROI_BOX_HEAD.NMS_WEIGHT_TYPE = "gaussian"
 
 _C.MODEL.ROI_MASK_HEAD = CN()
 _C.MODEL.ROI_MASK_HEAD.FEATURE_EXTRACTOR = "ResNet50Conv5ROIFeatureExtractor"

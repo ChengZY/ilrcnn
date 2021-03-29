@@ -22,7 +22,8 @@ class PostProcessor(nn.Module):
         nms=0.5,
         detections_per_img=100,
         box_coder=None,
-        cls_agnostic_bbox_reg=False
+        cls_agnostic_bbox_reg=False,
+        cfg=None,
     ):
         """
         Arguments:
@@ -39,6 +40,7 @@ class PostProcessor(nn.Module):
             box_coder = BoxCoder(weights=(10., 10., 5., 5.))
         self.box_coder = box_coder
         self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
+        self.cfg = cfg
 
     def forward(self, x, boxes):
         """
@@ -100,6 +102,9 @@ class PostProcessor(nn.Module):
         scores = scores.reshape(-1)
         boxlist = BoxList(boxes, image_shape, mode="xyxy")
         boxlist.add_field("scores", scores)
+        if self.cfg.MODEL.LABEL_TYPE == "soft":
+            boxlist.add_field("softlabels", scores)
+        # from ipdb import set_trace; set_trace()
         return boxlist
 
     def filter_results(self, boxlist, num_classes):
@@ -110,25 +115,35 @@ class PostProcessor(nn.Module):
         # if we had multi-class NMS, we could perform this directly on the boxlist
         boxes = boxlist.bbox.reshape(-1, num_classes * 4)
         scores = boxlist.get_field("scores").reshape(-1, num_classes)
+        if self.cfg.MODEL.LABEL_TYPE == "soft":
+            softlabels = boxlist.get_field("softlabels").reshape(-1, num_classes)
 
         device = scores.device
         result = []
         # Apply threshold on detection probabilities and apply NMS
         # Skip j = 0, because it's the background class
         inds_all = scores > self.score_thresh
-        for j in range(1, num_classes):
+        for j in range(1, num_classes): # 逐类别操作，当该box有大于score_thresh(0.05)的prob类别有2个，都会保留下来，所以避免了类间的竞争，因为nms也是对于class为单位操作的。
             inds = inds_all[:, j].nonzero().squeeze(1)
             scores_j = scores[inds, j]
             boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
             boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
             boxlist_for_class.add_field("scores", scores_j)
+            if self.cfg.MODEL.LABEL_TYPE == "soft": # and len(inds)!=0: # for debug
+                softlabels_j = softlabels[inds, :]
+                boxlist_for_class.add_field("softlabels", softlabels_j)
+                # from ipdb import set_trace; set_trace()
             boxlist_for_class = boxlist_nms(
-                boxlist_for_class, self.nms
+                boxlist_for_class, self.nms, 
+                nms_type=self.cfg.MODEL.ROI_BOX_HEAD.NMS_TYPE,
+                weight_type=self.cfg.MODEL.ROI_BOX_HEAD.NMS_WEIGHT_TYPE,
             )
             num_labels = len(boxlist_for_class)
             boxlist_for_class.add_field(
                 "labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)
             )
+            # if self.cfg.MODEL.LABEL_TYPE == "soft": #  and len(inds)!=0: # for debug
+            #     set_trace()
             result.append(boxlist_for_class)
 
         result = cat_boxlist(result)
@@ -162,6 +177,7 @@ def make_roi_box_post_processor(cfg):
         nms_thresh,
         detections_per_img,
         box_coder,
-        cls_agnostic_bbox_reg
+        cls_agnostic_bbox_reg,
+        cfg,
     )
     return postprocessor

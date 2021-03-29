@@ -4,9 +4,12 @@ import torch
 from .bounding_box import BoxList
 
 from maskrcnn_benchmark.layers import nms as _box_nms
+from maskrcnn_benchmark.layers.soft_nms import py_cpu_softnms
 
 
-def boxlist_nms(boxlist, nms_thresh, max_proposals=-1, score_field="scores"):
+def boxlist_nms(
+    boxlist, nms_thresh, max_proposals=-1, score_field="scores", nms_type="nms",
+    weight_type='gaussian'):
     """
     Performs non-maximum suppression on a boxlist, with scores specified
     in a boxlist field via score_field.
@@ -24,7 +27,17 @@ def boxlist_nms(boxlist, nms_thresh, max_proposals=-1, score_field="scores"):
     boxlist = boxlist.convert("xyxy")
     boxes = boxlist.bbox
     score = boxlist.get_field(score_field)
-    keep = _box_nms(boxes, score, nms_thresh)
+    if nms_type == "nms":
+        keep = _box_nms(boxes, score, nms_thresh)
+        # from ipdb import set_trace; set_trace()
+    elif nms_type == "soft_nms":
+        # box_scores = torch.cat([boxes, score[:,None]], dim=1)
+        # clone一份防止soft nms中对score的修改覆盖掉了boxlist中的score
+        keep = py_cpu_softnms(boxes.clone().cpu().numpy(), score.cpu().numpy())
+        keep = torch.tensor(keep).cuda()
+        # if boxes.shape[0] != 0:
+        #     from ipdb import set_trace; set_trace()
+        # keep = soft_nms(boxes, method=weight_type)
     if max_proposals > 0:
         keep = keep[: max_proposals]
     boxlist = boxlist[keep]

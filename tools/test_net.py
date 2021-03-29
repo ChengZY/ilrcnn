@@ -32,6 +32,12 @@ def main():
         metavar="FILE",
         help="path to config file",
     )
+    parser.add_argument(
+        "--checkpoint",
+        default="",
+        metavar="FILE",
+        help="path to checkpoint file",
+    )
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
         "opts",
@@ -54,6 +60,8 @@ def main():
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    if args.checkpoint != "":
+        cfg.MODEL.WEIGHT = args.checkpoint
     cfg.freeze()
 
     save_dir = ""
@@ -73,6 +81,7 @@ def main():
 
     output_dir = cfg.OUTPUT_DIR
     checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
+    print("*" * 50)
     _ = checkpointer.load(cfg.MODEL.WEIGHT)
 
     iou_types = ("bbox",)

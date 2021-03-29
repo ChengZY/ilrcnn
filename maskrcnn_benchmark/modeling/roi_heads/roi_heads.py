@@ -4,6 +4,7 @@ import torch
 from .box_head.box_head import build_roi_box_head
 from .mask_head.mask_head import build_roi_mask_head
 from .keypoint_head.keypoint_head import build_roi_keypoint_head
+from .proto_head.proto_head import build_roi_proto_box_head
 
 
 class CombinedROIHeads(torch.nn.ModuleDict):
@@ -76,6 +77,12 @@ def build_roi_heads(cfg, in_channels):
     roi_heads = []
     if cfg.MODEL.RETINANET_ON:
         return []
+
+    if cfg.MODEL.PROTO_ON:
+        roi_heads.append(("box", build_roi_proto_box_head(cfg, in_channels))) # have to overwrite "box" key in dict
+        if roi_heads:
+            roi_heads = CombinedROIHeads(cfg, roi_heads)
+        return roi_heads
 
     if not cfg.MODEL.RPN_ONLY:
         roi_heads.append(("box", build_roi_box_head(cfg, in_channels)))

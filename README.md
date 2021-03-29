@@ -13,6 +13,12 @@ This Faster ILOD implementation is based on [maskrcnn-benchmark](https://github.
 
 Please check [INSTALL.md](https://github.com/CanPeng123/Faster-ILOD/blob/main/INSTALL.md) for installation instructions. You may also want to see the original [README.md of maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/README.md).
 
+
+
+# Code Usage
+**diff_result.py**: compare two configs' inference result into one AP output
+
+
 # Training
 
 The files used to train Faster ILOD models are under [Faster-ILOD/tools](https://github.com/CanPeng123/Faster-ILOD/tree/main/tools) folder.
@@ -57,18 +63,3 @@ The code for loading COCO dataset to the model is written on the file [Faster-IL
 
 The code for calculating feature, RPN, and RCN distillation losses are written on the file [Faster-ILOD/blob/main/maskrcnn_benchmark/distillation/distillation.py](https://github.com/CanPeng123/Faster-ILOD/blob/main/maskrcnn_benchmark/distillation/distillation.py).
 
-## Citations
-
-Please consider citing the following paper in your publications if it helps your research.
-
-```latexlatex
-@article{peng2020faster,
-  title={Faster ILOD: Incremental Learning for Object Detectors based on Faster RCNN},  
-  author={Peng, Can and Zhao, Kun and Lovell, Brian C},  
-  journal={Pattern Recognition Letters},  
-  year={2020} 
-}
-```
-
-## Acknowledgements
-Our Faster ILOD implementation is based on [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark). We thanks the authors for making their code public.

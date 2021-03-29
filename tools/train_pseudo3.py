@@ -45,16 +45,69 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 from torchvision.transforms import functional as F
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from collections import Counter
 CATEGORIES = ["__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
             "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+
+def vis_pred(images, targets, src_pred):
+    # images: ImageList images.tensors.shape, images.image_sizes
+    for k in range(images.tensors.shape[0]):
+        # transform from tensor-> array
+        cv2_img = F.normalize(images.tensors[k], mean=[-102.9801/1., -115.9465/1., -122.7717/1.], std=[1., 1., 1.])
+        cv2_img = np.array(cv2_img.permute(1,2,0).cpu()).astype(np.uint8)
+        h, w = cv2_img.shape[:-1]
+        print(cv2_img.shape)
+        # draw gt box on array
+        for j in range(targets[k].bbox.shape[0]): # travel each box in one img
+            bbox = targets[k].bbox[j].cpu()
+            cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)
+
+        ss = src_pred[k].get_field("scores")
+        keep = torch.nonzero(ss > 0.7).squeeze(1)
+        src_pred[k] = src_pred[k][keep]
+
+        src_score = src_pred[k].get_field("scores").tolist()
+        src_label = src_pred[k].get_field("labels").tolist()
+        src_bbox = src_pred[k].resize((w, h)).bbox.data.cpu()
+        src_catname = [CATEGORIES[i] for i in src_label]
+
+        s = "{}: {:.2f}"
+        # overlap src prediciton box
+        for m in range(src_bbox.shape[0]):
+            cv2.rectangle(cv2_img, (src_bbox[m][0], src_bbox[m][1]), (src_bbox[m][2], src_bbox[m][3]), (0,0,255), 2)
+            cv2.putText(cv2_img, s.format(src_catname[m], src_score[m]), (src_bbox[m][0], src_bbox[m][1]-5), cv2.FONT_HERSHEY_SIMPLEX, 1., (0,0,255), 1)
+        cv2.imshow("VOC", cv2_img)
+        if cv2.waitKey(0) == 27: # 'ESC'
+            cv2.destroyAllWindows() 
+            exit(0)
+
+def stat_pred(images, src_pred):
+    """
+    统计pred的instance的分布
+    """
+    pred_cat = []
+    # images: ImageList images.tensors.shape, images.image_sizes
+    for k in range(images.tensors.shape[0]):
+        # src_score = src_pred[k].get_field("scores").tolist()
+        src_label = src_pred[k].get_field("labels").tolist()
+        # src_bbox = src_pred[k].resize((w, h)).bbox.data.cpu()
+        src_catname = [CATEGORIES[i] for i in src_label]
+
+        pred_cat.extend(src_catname)
+
+    return pred_cat
+
+
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer):
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target):
 
     # record log information
     logger = logging.getLogger("maskrcnn_benchmark_target_model.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")  # used to record
     max_iter = len(data_loader)  # data loader rewrites the len() function and allows it to return the number of batches (cfg.SOLVER.MAX_ITER)
+    print("++++++" * 5)
+    print(max_iter)
     start_iter = arguments_target["iteration"]  # 0
     model_target.train()  # set the target model in training mode
     model_source.eval()  # set the source model in inference mode
@@ -62,6 +115,9 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
     end = time.time()
     average_distillation_loss = 0
     average_faster_rcnn_loss = 0
+
+    if args.stat:
+        pred_catlist = []
 
     for iteration, (images, targets, _, idx) in enumerate(data_loader, start_iter):
 
@@ -72,9 +128,15 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
 
         images = images.to(device)   # move images to the device
         targets = [target.to(device) for target in targets]  # move targets (labels) to the device
-        # from ipdb import set_trace
+        
         # source model prediction
         src_pred = model_source(images)[0]
+
+        # 可视化过滤pred box之前的所有pred box
+        # if args.vis:
+        #     vis_pred(images, targets, src_pred)
+        #     continue
+
         #### 添加pred到gt中 ####
         # per image
         for gt, pred in zip(targets, src_pred):
@@ -83,9 +145,7 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             targets: BoxList -> bbox, size, mode, extra_fields, difficult
             """
             pred_scores = pred.get_field("scores")
-            CONFIDENCE_THRESH = 0.7
-            IOU_THRESH = 0.5
-            keep = torch.nonzero(pred_scores > CONFIDENCE_THRESH).squeeze(1)
+            keep = torch.nonzero(pred_scores > cfg_target.MODEL.PSEUDO_CONF_THRESH).squeeze(1)
             pred = pred[keep]
             
             with torch.no_grad():
@@ -93,7 +153,7 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
                     iou_matrix = boxlist_iou(pred, gt)
                     max_iou = iou_matrix.max(dim=1)[0]
                     # set_trace()
-                    keep2 = torch.nonzero(max_iou < IOU_THRESH).squeeze(1)
+                    keep2 = torch.nonzero(max_iou < cfg_target.MODEL.PSEUDO_IOU_THRESH).squeeze(1)
                     pred = pred[keep2]
 
             pred_scores = pred.get_field("scores")# .tolist() # update pred scores
@@ -103,62 +163,46 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             merge_boxes = torch.cat([gt.bbox, pred_boxes], dim=0)
             gt.bbox = merge_boxes
             gt.add_field('scores', torch.cat([torch.ones_like(gt.extra_fields['labels'], dtype=torch.float32), pred_scores], dim=0))
+            gt.add_field('is_gt', torch.cat([torch.ones_like(gt.extra_fields['labels']), torch.zeros_like(pred_labels)], dim=0))
             gt.extra_fields['labels'] = torch.cat([gt.extra_fields['labels'], pred_labels], dim=0)
             gt.extra_fields['difficult'] = torch.cat([gt.extra_fields['difficult'], torch.zeros_like(pred_labels).to(torch.uint8)], dim=0)
             after_num = gt.bbox.shape[0]
             print("Box Number transformation: {} -> {}".format(before_num, after_num))
-        """
-        可视化预测和gt在图上【先合并再可视化】
-        """
-        # for k in range(images.tensors.shape[0]):
-        #     # transform from tensor-> array
-        #     cv2_img = F.normalize(images.tensors[k], mean=[-102.9801/1., -115.9465/1., -122.7717/1.], std=[1., 1., 1.])
-        #     cv2_img = np.array(cv2_img.permute(1,2,0).cpu()).astype(np.uint8)
-        #     h, w = cv2_img.shape[:-1]
-        #     print(cv2_img.shape)
-        #     # draw gt box on array
-        #     for j in range(targets[k].bbox.shape[0]): # travel each box in one img
-        #         bbox = targets[k].bbox[j].cpu()
-        #         cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)
-        
-        #     cv2.imshow("VOC", cv2_img)
-        #     if cv2.waitKey(0) == 27: # 'ESC'
-        #         cv2.destroyAllWindows() 
-        #         exit(0)    
+            # from ipdb import set_trace; set_trace()
 
-        """
-        可视化预测和gt在图上【先可视化再合并】
-        # images: ImageList images.tensors.shape, images.image_sizes
-        for k in range(images.tensors.shape[0]):
-            # transform from tensor-> array
-            cv2_img = F.normalize(images.tensors[k], mean=[-102.9801/1., -115.9465/1., -122.7717/1.], std=[1., 1., 1.])
-            cv2_img = np.array(cv2_img.permute(1,2,0).cpu()).astype(np.uint8)
-            h, w = cv2_img.shape[:-1]
-            print(cv2_img.shape)
-            # draw gt box on array
-            for j in range(targets[k].bbox.shape[0]): # travel each box in one img
-                bbox = targets[k].bbox[j].cpu()
-                cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)
+        # 可视化过滤pred box之后的pred box
+        if args.vis:
+            # vis_pred(images, targets, src_pred)
+            for k in range(images.tensors.shape[0]):
+                # transform from tensor-> array
+                cv2_img = F.normalize(images.tensors[k], mean=[-102.9801/1., -115.9465/1., -122.7717/1.], std=[1., 1., 1.])
+                cv2_img = np.array(cv2_img.permute(1,2,0).cpu()).astype(np.uint8)
+                h, w = cv2_img.shape[:-1]
+                # print(cv2_img.shape)
+                # draw gt box on array
+                for j in range(targets[k].bbox.shape[0]): # travel each box in one img
+                    bbox = targets[k].bbox[j].cpu()
+                    score = targets[k].get_field("scores")[j]
+                    label = targets[k].get_field("labels")[j]
+                    catname = CATEGORIES[label]
+                    s = "{}: {:.2f}"
+                    if score == 1.: # is gt, then GREEN
+                        cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)
+                    else:
+                        cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,0,255), 2)
+                        cv2.putText(cv2_img, s.format(catname, score), (bbox[0], bbox[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 1., (0,0,255), 1)
+                # from ipdb import set_trace; set_trace()
+                cv2.imshow("VOC", cv2_img)
+                if cv2.waitKey(0) == 27: # 'ESC'
+                    cv2.destroyAllWindows() 
+                    exit(0)
+            continue
 
-            ss = src_pred[k].get_field("scores")
-            keep = torch.nonzero(ss > 0.7).squeeze(1)
-            src_pred[k] = src_pred[k][keep]
+        if args.stat:
+            tmp = stat_pred(images, src_pred)
+            pred_catlist.extend(tmp)
+            continue
 
-            src_score = src_pred[k].get_field("scores").tolist()
-            src_label = src_pred[k].get_field("labels").tolist()
-            src_bbox = src_pred[k].resize((w, h)).bbox.data.cpu()
-            src_catname = [CATEGORIES[i] for i in src_label]
-
-            s = "{}: {:.2f}"
-            # overlap src prediciton box
-            for m in range(src_bbox.shape[0]):
-                cv2.rectangle(cv2_img, (src_bbox[m][0], src_bbox[m][1]), (src_bbox[m][2], src_bbox[m][3]), (0,0,255), 2)
-                cv2.putText(cv2_img, s.format(src_catname[m], src_score[m]), (src_bbox[m][0], src_bbox[m][1]-5), cv2.FONT_HERSHEY_SIMPLEX, 1., (0,0,255), 1)
-            cv2.imshow("VOC", cv2_img)
-            if cv2.waitKey(0) == 27: # 'ESC'
-                cv2.destroyAllWindows() 
-                exit(0)
-        """ 
         loss_dict_target, feature_target, backbone_feature_target, anchor_target, rpn_output_target = model_target(images, targets)
         faster_rcnn_losses = sum(loss for loss in loss_dict_target.values())  # summarise the losses for faster rcnn
         """
@@ -230,6 +274,18 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         # When meets the last iteration, save the target model (parameters)
         if iteration == max_iter:
             checkpointer_target.save("model_final", **arguments_target)
+    if args.stat:
+        pred_cat_cnt = Counter(pred_catlist)
+        # print(pred_cat_cnt)
+        from maskrcnn_benchmark.data.datasets import voc
+        print("Pred Instance Class Statistics")
+        old_classes = list(voc.CLS_SETS[cfg_target.MODEL.ROI_BOX_HEAD.SPLIT][0])
+        tpt = "{}:\t {}\t"
+        for x in old_classes:
+            num = pred_cat_cnt[x] if x in pred_cat_cnt.keys() else 0
+            print(tpt.format(x, num))
+        from ipdb import set_trace; set_trace()
+        
     # Display the total used training time
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
@@ -282,7 +338,7 @@ def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
 
     # train the model using overwrite function
     do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer)
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target)
 
     return model_target
 
@@ -344,6 +400,17 @@ def main():
         help="path to target config file",
         type=str,
     )
+    parser.add_argument(
+        "--vis",
+        help="visualize mode",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--stat",
+        help="statistic mode",
+        action="store_true",
+    )
+    global args
     args = parser.parse_args()
     # source_model_config_file = "/home/zhengkai/Faster-ILOD/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml"
     # target_model_config_file = "/home/zhengkai/Faster-ILOD/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml"
@@ -363,6 +430,8 @@ def main():
     cfg_source.merge_from_file(source_model_config_file)
     subset = source_model_config_file.split('/')[2]
     yaml_name = source_model_config_file.split('/')[3]
+    if cfg_source.MODEL.WEIGHT == "": # if none, then make up for it automatically
+        cfg_source.MODEL.WEIGHT = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "model_final.pth")
     cfg_source.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source")
     cfg_source.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
     cfg_source.freeze()
@@ -370,8 +439,13 @@ def main():
     cfg_target.merge_from_file(target_model_config_file)
     subset = target_model_config_file.split('/')[2]
     yaml_name = target_model_config_file.split('/')[3]
-    cfg_target.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source")
-    cfg_target.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
+    if cfg_target.MODEL.WEIGHT == "": # if none, then make up for it automatically
+        cfg_target.MODEL.WEIGHT = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "model_trim_optimizer_iteration.pth")
+    cfg_target.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "target")
+    cfg_target.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "target", "tensorboard")
+    # only run through one epoch
+    if args.stat:
+        cfg_target.SOLVER.MAX_ITER = None
     cfg_target.freeze()
 
     output_dir_target = cfg_target.OUTPUT_DIR

@@ -259,6 +259,13 @@ def main():
         help="path to target config file",
         type=str,
     )
+    parser.add_argument(
+        "opts",
+        help="Modify config options using the command-line",
+        default=None,
+        nargs=argparse.REMAINDER,
+    )
+
     args = parser.parse_args()
     # source_model_config_file = "/home/zhengkai/Faster-ILOD/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml"
     # target_model_config_file = "/home/zhengkai/Faster-ILOD/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml"
@@ -276,17 +283,23 @@ def main():
     YML_ROOT = '/data1/pbdata/data_zk/Faster-ILOD'
     cfg_source = cfg.clone()
     cfg_source.merge_from_file(source_model_config_file)
+    cfg_source.merge_from_list(args.opts)
     subset = source_model_config_file.split('/')[2]
     yaml_name = source_model_config_file.split('/')[3]
+    if cfg_source.MODEL.WEIGHT == "": # if none, then make up for it automatically
+        cfg_source.MODEL.WEIGHT = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "model_final.pth")
     cfg_source.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source")
     cfg_source.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
     cfg_source.freeze()
     cfg_target = cfg.clone()
     cfg_target.merge_from_file(target_model_config_file)
+    cfg_target.merge_from_list(args.opts)
     subset = target_model_config_file.split('/')[2]
     yaml_name = target_model_config_file.split('/')[3]
-    cfg_target.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source")
-    cfg_target.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
+    if cfg_target.MODEL.WEIGHT == "": # if none, then make up for it automatically
+        cfg_target.MODEL.WEIGHT = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "model_trim_optimizer_iteration.pth")
+    cfg_target.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "target")
+    cfg_target.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "target", "tensorboard")
     cfg_target.freeze()
 
     output_dir_target = cfg_target.OUTPUT_DIR

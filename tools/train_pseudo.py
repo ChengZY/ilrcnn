@@ -358,8 +358,8 @@ def main():
     cfg_target.merge_from_file(target_model_config_file)
     subset = target_model_config_file.split('/')[2]
     yaml_name = target_model_config_file.split('/')[3]
-    cfg_target.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source")
-    cfg_target.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "source", "tensorboard")
+    cfg_target.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "target")
+    cfg_target.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "target", "tensorboard")
     cfg_target.freeze()
 
     output_dir_target = cfg_target.OUTPUT_DIR

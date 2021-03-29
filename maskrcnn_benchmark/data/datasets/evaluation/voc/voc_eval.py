@@ -41,12 +41,21 @@ def do_voc_evaluation(dataset, predictions, output_folder, logger):
         use_07_metric=True,
     )
     result_str = "mAP: {:.4f}\n".format(result["map"])
+    old_ap, new_ap = [], []
     for i, ap in enumerate(result["ap"]):
         if i == 0:  # skip background
             continue
         result_str += "{:<16}: {:.4f}\n".format(
             dataset.map_class_id_to_class_name(i), ap
         )
+        if dataset.map_class_id_to_class_name(i) in dataset.old_classes:
+            old_ap.append(ap)
+        elif dataset.map_class_id_to_class_name(i) in dataset.new_classes:
+            new_ap.append(ap)
+    old_map = np.nanmean(np.array(old_ap))
+    new_map = np.nanmean(np.array(new_ap))
+    result_str += "old mAP: {:.4f}\n".format(old_map)
+    result_str += "new mAP: {:.4f}\n".format(new_map)
     logger.info(result_str)
     if output_folder:
         with open(os.path.join(output_folder, "result.txt"), "w") as fid:
@@ -83,8 +92,8 @@ def calc_detection_voc_prec_rec(gt_boxlists, pred_boxlists, iou_thresh=0.5):
    """
     n_pos = defaultdict(int)
     score = defaultdict(list)
-    match = defaultdict(list)
-    for gt_boxlist, pred_boxlist in zip(gt_boxlists, pred_boxlists):
+    match = defaultdict(list) # 每个类别，每个pred box是否匹配到了
+    for gt_boxlist, pred_boxlist in zip(gt_boxlists, pred_boxlists): # 对每个image操作
         pred_bbox = pred_boxlist.bbox.numpy()
         pred_label = pred_boxlist.get_field("labels").numpy()
         pred_score = pred_boxlist.get_field("scores").numpy()
@@ -92,7 +101,8 @@ def calc_detection_voc_prec_rec(gt_boxlists, pred_boxlists, iou_thresh=0.5):
         gt_label = gt_boxlist.get_field("labels").numpy()
         gt_difficult = gt_boxlist.get_field("difficult").numpy()
 
-        for l in np.unique(np.concatenate((pred_label, gt_label)).astype(int)):
+        for l in np.unique(np.concatenate((pred_label, gt_label)).astype(int)): # 对该image中pred和gt得到的unqiue类别操作
+            # 每次只获取pred和gt中属于类l的box的信息
             pred_mask_l = pred_label == l
             pred_bbox_l = pred_bbox[pred_mask_l]
             pred_score_l = pred_score[pred_mask_l]
@@ -122,14 +132,14 @@ def calc_detection_voc_prec_rec(gt_boxlists, pred_boxlists, iou_thresh=0.5):
             iou = boxlist_iou(
                 BoxList(pred_bbox_l, gt_boxlist.size),
                 BoxList(gt_bbox_l, gt_boxlist.size),
-            ).numpy()
+            ).numpy()# (nr_pred, nr_gt)
             gt_index = iou.argmax(axis=1)
             # set -1 if there is no matching ground truth
-            gt_index[iou.max(axis=1) < iou_thresh] = -1
+            gt_index[iou.max(axis=1) < iou_thresh] = -1 # (nr_pred,)
             del iou
 
-            selec = np.zeros(gt_bbox_l.shape[0], dtype=bool)
-            for gt_idx in gt_index:
+            selec = np.zeros(gt_bbox_l.shape[0], dtype=bool) # (nr_gt, ) 表示该gt是否被匹配到了
+            for gt_idx in gt_index: # each pred's matching gt index
                 if gt_idx >= 0:
                     if gt_difficult_l[gt_idx]:
                         match[l].append(-1)
