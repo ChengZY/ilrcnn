@@ -18,12 +18,12 @@ import copy
 
 # {split: (old_class, new_class)}
 CLS_SETS = {
-    '10+10': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow"),
+    'v1010': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow"),
             ("diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")),
-    '15+5': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", 
+    'v155': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", 
             "diningtable", "dog", "horse", "motorbike", "person"),
             ("pottedplant", "sheep", "sofa", "train", "tvmonitor")),
-    '19+1': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
+    'v191': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
             "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train"),
             ("tvmonitor",))
 }
