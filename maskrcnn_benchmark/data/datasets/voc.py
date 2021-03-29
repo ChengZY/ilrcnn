@@ -14,19 +14,34 @@ else:
     import xml.etree.ElementTree as ET
 
 from maskrcnn_benchmark.structures.bounding_box import BoxList
+import copy
 
+# {split: (old_class, new_class)}
+CLS_SETS = {
+    '10+10': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow"),
+            ("diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")),
+    '15+5': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", 
+            "diningtable", "dog", "horse", "motorbike", "person"),
+            ("pottedplant", "sheep", "sofa", "train", "tvmonitor")),
+    '19+1': (("aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
+            "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train"),
+            ("tvmonitor",))
+}
+# 注意19+1，1的tuple[1]需要额外加一个, 否则会将字符串拆分
 
 class PascalVOCDataset(torch.utils.data.Dataset):
-
-    CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
-               "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
+    # 第二阶段，则用全数据集
+    # CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
+    #            "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
     """
+    第一阶段
     如果挑选出来的new class有在old class之前的，则需要手动调整CLASSES，去掉new class
     CLASSES = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
                "diningtable", "dog", "horse", "motorbike", "pottedplant", "sheep", "sofa", "train", "tvmonitor")
     """
-    def __init__(self, data_dir, split, use_difficult=False, transforms=None, external_proposal=False, old_classes=[],
-                 new_classes=[], excluded_classes=[], is_train=True):
+    # def __init__(self, data_dir, split, use_difficult=False, transforms=None, external_proposal=False, old_classes=[],
+    #              new_classes=[], excluded_classes=[], is_train=True):
+    def __init__(self, data_dir, split, use_difficult=False, transforms=None, external_proposal=False, cfg=None, is_train=True):
         self.root = data_dir
         self.image_set = split  # train, validation, test
         self.keep_difficult = use_difficult
@@ -41,11 +56,27 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         self._img_height = 0
         self._img_width = 0
 
-        self.old_classes = old_classes
-        self.new_classes = new_classes
-        self.exclude_classes = excluded_classes
+        # self.old_classes = old_classes
+        # self.new_classes = new_classes
+        # self.exclude_classes = excluded_classes
         self.is_train = is_train
-
+        self.cfg = cfg
+        self.is_incremental = cfg.MODEL.ROI_BOX_HEAD.INCREMENTAL
+        if not self.is_incremental:
+            self.old_classes = []
+            self.new_classes = list(CLS_SETS[cfg.MODEL.ROI_BOX_HEAD.SPLIT][0])
+            self.exclude_classes = list(CLS_SETS[cfg.MODEL.ROI_BOX_HEAD.SPLIT][1])
+            new_copy = copy.deepcopy(self.new_classes)
+            new_copy.insert(0, "__background__ ")
+            self.CLASSES = tuple(new_copy)
+        else:
+            self.old_classes = list(CLS_SETS[cfg.MODEL.ROI_BOX_HEAD.SPLIT][0])
+            self.new_classes = list(CLS_SETS[cfg.MODEL.ROI_BOX_HEAD.SPLIT][1])
+            self.exclude_classes = []
+            new_copy = copy.deepcopy(self.old_classes+self.new_classes)
+            new_copy.insert(0, "__background__ ")
+            self.CLASSES = tuple(new_copy)
+        # from ipdb import set_trace; set_trace()
         # load data from all categories
         # self._normally_load_voc()
 
@@ -58,6 +89,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
             self._load_img_from_NEW_and_OLD_cls_without_old_data()
 
     def _normally_load_voc(self):
+        # not use
         """ load data from all 20 categories """
 
         print("voc.py | normally_load_voc | load data from all 20 categories")
@@ -67,10 +99,16 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         self.final_ids = self.ids
         self.id_to_img_map = {k: v for k, v in enumerate(self.ids)}  # image_index : image_id
 
-        cls = PascalVOCDataset.CLASSES
+        # cls = PascalVOCDataset.CLASSES
+        cls = tuple(CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][0] \
+            + CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][1] \
+            + "__background__ ")
         self.class_to_ind = dict(zip(cls, range(len(cls))))  # class_name : class_id
 
     def _load_img_from_NEW_and_OLD_cls_without_old_data(self):
+        """
+        测试的时候，new + old
+        """
         self.ids = []
         total_classes = self.new_classes + self.old_classes
         for w in range(len(total_classes)):
@@ -109,7 +147,8 @@ class PascalVOCDataset(torch.utils.data.Dataset):
 
         # store image ids and class ids
         self.id_to_img_map = {k: v for k, v in enumerate(self.final_ids)}
-        cls = PascalVOCDataset.CLASSES
+        cls = self.CLASSES # PascalVOCDataset.CLASSES
+        # cls = CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][0] + CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][1]
         self.class_to_ind = dict(zip(cls, range(len(cls))))
         # from ipdb import set_trace; set_trace()
     def _load_img_from_NEW_cls_without_old_data(self):
@@ -154,9 +193,14 @@ class PascalVOCDataset(torch.utils.data.Dataset):
 
         # store image ids and class ids
         self.id_to_img_map = {k: v for k, v in enumerate(self.final_ids)}
-        cls = PascalVOCDataset.CLASSES
-        self.class_to_ind = dict(zip(cls, range(len(cls))))
+        cls = self.CLASSES # PascalVOCDataset.CLASSES
+        # if self.is_incremental:
+        #     cls = CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][0] + CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][1]
+        # else:
+        #     cls = self.old_classes
         # from ipdb import set_trace; set_trace()
+        self.class_to_ind = dict(zip(cls, range(len(cls))))
+        
     def __getitem__(self, index):
         img_id = self.final_ids[index]
         img = Image.open(self._imgpath % img_id).convert("RGB")
@@ -183,7 +227,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
     def get_groundtruth(self, index):
         img_id = self.final_ids[index]
         anno = ET.parse(self._annopath % img_id).getroot()
-        anno = self._preprocess_annotation(anno)
+        anno = self._preprocess_annotation(anno) # {'boxes': tensor, "labels": tensor, "difficult": tensor, "im_info":xx}
 
         height, width = anno["im_info"]
         self._img_height = height
@@ -281,7 +325,12 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         return {"height": im_info[0], "width": im_info[1]}
 
     def map_class_id_to_class_name(self, class_id):
-        return PascalVOCDataset.CLASSES[class_id]
+        return self.CLASSES[class_id] # PascalVOCDataset.CLASSES[class_id]
+        # if self.is_incremental:
+        #     cls = CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][0] + CLS_SETS[self.cfg.MODEL.ROI_BOX_HEAD.SPLIT][1]
+        # else:
+        #     cls = self.old_classes
+        # return cls[class_id]
 
     def get_img_id(self, index):
         img_id = self.final_ids[index]

@@ -11,3 +11,5 @@ datasets/
 incremental_learning_ResNet50_C4/
 maskrcnn_benchmark.egg-info/
 build/
+*.npy
+*.png

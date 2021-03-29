@@ -25,10 +25,11 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+YML_ROOT = '/data1/pbdata/data_zk/Faster-ILOD'
 subset = args.config_file.split('/')[2]
 yaml_name = args.config_file.split('/')[3]
-args.pretrained_path = os.path.join("./incremental_learning_ResNet50_C4/", subset, "model_final.pth")
-args.save_path = os.path.join("./incremental_learning_ResNet50_C4/", subset, "model_trim_optimizer_iteration.pth")
+args.pretrained_path = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "model_final.pth")
+args.save_path = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "model_trim_optimizer_iteration.pth")
 PRETRAINED_PATH = os.path.expanduser(args.pretrained_path)
 print('pretrained model path: {}'.format(PRETRAINED_PATH))
 

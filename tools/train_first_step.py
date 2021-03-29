@@ -200,11 +200,11 @@ def main():
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
-    # from ipdb import set_trace; set_trace()
+    YML_ROOT = '/data1/pbdata/data_zk/Faster-ILOD'
     subset = args.config_file.split('/')[2]
     yaml_name = args.config_file.split('/')[3]
-    cfg.OUTPUT_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset)
-    cfg.TENSORBOARD_DIR = os.path.join("./incremental_learning_ResNet50_C4/", subset, "tensorboard")
+    cfg.OUTPUT_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step")
+    cfg.TENSORBOARD_DIR = os.path.join(YML_ROOT + "/incremental_learning_ResNet50_C4/", subset, "first_step", "tensorboard")
     cfg.freeze()
 
     output_dir = cfg.OUTPUT_DIR

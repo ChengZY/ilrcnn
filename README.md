@@ -13,62 +13,17 @@ This Faster ILOD implementation is based on [maskrcnn-benchmark](https://github.
 
 Please check [INSTALL.md](https://github.com/CanPeng123/Faster-ILOD/blob/main/INSTALL.md) for installation instructions. You may also want to see the original [README.md of maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/README.md).
 
-# Training
 
-The files used to train Faster ILOD models are under [Faster-ILOD/tools](https://github.com/CanPeng123/Faster-ILOD/tree/main/tools) folder.
+# Code Usage
+**diff_result.py**: compare two configs' inference result into one AP output
 
-**train_first_step.py**: normally train the first task (standard training). 
+# pretrain model for incremental learning
+`normal setting`
+**10+10**: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source/model_final.pth"
+**10+10**: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source/model_trim_optimizer_iteration.pth"
+**15+5**:
+**15+5**:
+**19+1**:
+**19+1**:
 
-**train_incremental.py**: incrementally train the following tasks (knowledge distillation based training).
-
-The config settings for the models and datasets are under [Faster-ILOD/configs](https://github.com/CanPeng123/Faster-ILOD/tree/main/configs) folder.
-
-### VOC dataset training
-
-**e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml**: config and dataset settings for source model (ResNet50) trained on VOC dataset.
-
-**e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml**: config and dataset settings for target model (ResNet50) trained on VOC dataset.
-
-The code for loading VOC dataset to the model is written on the file [Faster-ILOD/maskrcnn_benchmark/data/datasets/voc.py](https://github.com/CanPeng123/Faster-ILOD/blob/main/maskrcnn_benchmark/data/datasets/voc.py).
-
-1. Please modify the path for putting VOC dataset on the file [Faster-ILOD/maskrcnn_benchmark/config/paths_catalog.py](https://github.com/CanPeng123/Faster-ILOD/blob/main/maskrcnn_benchmark/config/paths_catalog.py).
-
-2. Please modify the setting for the name of old class categories (all previously trained categories) on NAME_OLD_CLASSES on the file [e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml).
-
-3. Please modify the setting for the name of new class categories (categories for current training task) on NAME_NEW_CLASSES on the file [e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml).
-
-4. Please modify the setting for the name of excluded categories (categories not used, since VOC has 20 categories) on NAME_EXCLUDED_CLASSES on the file [e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml).
-
-5. Please modify the number of detecting categories on NUM_CLASSES on the file [e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model.yaml) (number of old categories) and the file [e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model.yaml) (number of old and new categories), repectively. 
-
-### COCO dataset training
-
-**e2e_faster_rcnn_R_50_C4_1x_Source_model_COCO.yaml**: config and dataset settings for source model (ResNet50) trained on COCO dataset.
-
-**e2e_faster_rcnn_R_50_C4_1x_Target_model_COCO.yaml**: config and dataset settings for target model (ResNet50) trained on COCO dataset.
-
-The code for loading COCO dataset to the model is written on the file [Faster-ILOD/maskrcnn_benchmark/data/datasets/coco.py](https://github.com/CanPeng123/Faster-ILOD/blob/main/maskrcnn_benchmark/data/datasets/coco.py).
-
-1. Please modify the path for putting COCO dataset on the file [Faster-ILOD/maskrcnn_benchmark/config/paths_catalog.py](https://github.com/CanPeng123/Faster-ILOD/blob/main/maskrcnn_benchmark/config/paths_catalog.py).
-
-2. The categories for COCO dataset training are added in alphabetical orders. Please modify the number of detecting categories on NUM_CLASSES on the file [e2e_faster_rcnn_R_50_C4_1x_Source_model_COCO.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Source_model_COCO.yaml) (number of old categories) and the file [e2e_faster_rcnn_R_50_C4_1x_Target_model_COCO.yaml](https://github.com/CanPeng123/Faster-ILOD/blob/main/configs/e2e_faster_rcnn_R_50_C4_1x_Target_model_COCO.yaml) (number of old and new categories), repectively. 
-
-## Distillation Loss
-
-The code for calculating feature, RPN, and RCN distillation losses are written on the file [Faster-ILOD/blob/main/maskrcnn_benchmark/distillation/distillation.py](https://github.com/CanPeng123/Faster-ILOD/blob/main/maskrcnn_benchmark/distillation/distillation.py).
-
-## Citations
-
-Please consider citing the following paper in your publications if it helps your research.
-
-```latexlatex
-@article{peng2020faster,
-  title={Faster ILOD: Incremental Learning for Object Detectors based on Faster RCNN},  
-  author={Peng, Can and Zhao, Kun and Lovell, Brian C},  
-  journal={Pattern Recognition Letters},  
-  year={2020} 
-}
-```
-
-## Acknowledgements
-Our Faster ILOD implementation is based on [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark). We thanks the authors for making their code public.
+`trick setting`

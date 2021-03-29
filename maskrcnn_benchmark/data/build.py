@@ -14,7 +14,8 @@ from .collate_batch import BatchCollator
 from .transforms import build_transforms
 
 
-def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True, external_proposal=False, old_classes=None, new_classes=None, excluded_classes=None):
+# def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True, external_proposal=False, old_classes=None, new_classes=None, excluded_classes=None):
+def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True, external_proposal=False, cfg=None):
     """
     Arguments:
         dataset_list (list[str]): Contains the names of the datasets, i.e. coco_2014_trian, coco_2014_val, etc
@@ -36,10 +37,12 @@ def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True, exte
         if data["factory"] == "PascalVOCDataset":
             args["use_difficult"] = not is_train  # during training, do not use difficult
             args["external_proposal"] = external_proposal  # whether use external proposals
-            args["old_classes"] = old_classes
-            args["new_classes"] = new_classes
-            args["excluded_classes"] = excluded_classes
+            # args["old_classes"] = old_classes
+            # args["new_classes"] = new_classes
+            # args["excluded_classes"] = excluded_classes
+            args["cfg"] = cfg
             args["is_train"] = is_train
+
         if data["factory"] == "GlomDataset":
             args["is_train"] = is_train
         if data["factory"] == "CompressionDataset":
@@ -146,17 +149,18 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0, ext
     DatasetCatalog = paths_catalog.DatasetCatalog
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
     transforms = build_transforms(cfg, is_train)
-    old_classes = cfg.MODEL.ROI_BOX_HEAD.NAME_OLD_CLASSES
-    new_classes = cfg.MODEL.ROI_BOX_HEAD.NAME_NEW_CLASSES
-    excluded_classes = cfg.MODEL.ROI_BOX_HEAD.NAME_EXCLUDED_CLASSES
+    # old_classes = cfg.MODEL.ROI_BOX_HEAD.NAME_OLD_CLASSES
+    # new_classes = cfg.MODEL.ROI_BOX_HEAD.NAME_NEW_CLASSES
+    # excluded_classes = cfg.MODEL.ROI_BOX_HEAD.NAME_EXCLUDED_CLASSES
 
-    datasets = build_dataset(dataset_list, transforms, DatasetCatalog, is_train, external_proposal, old_classes, new_classes, excluded_classes)
+    # datasets = build_dataset(dataset_list, transforms, DatasetCatalog, is_train, external_proposal, old_classes, new_classes, excluded_classes)
+    datasets = build_dataset(dataset_list, transforms, DatasetCatalog, is_train, external_proposal, cfg)
 
     data_loaders = []
     for dataset in datasets:
         sampler = make_data_sampler(dataset, shuffle, is_distributed)
         batch_sampler = make_batch_data_sampler(dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter)
-        collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
+        collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY) # 用于把一个batch的数据转换成ImageList格式
         num_workers = cfg.DATALOADER.NUM_WORKERS
         data_loader = torch.utils.data.DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=collator) # num_workers=num_workers,
         data_loaders.append(data_loader)

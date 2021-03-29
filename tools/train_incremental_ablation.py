@@ -46,7 +46,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer):
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target):
 
     # record log information
     logger = logging.getLogger("maskrcnn_benchmark_target_model.trainer")
@@ -77,14 +77,19 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         roi_distillation_losses, rpn_output_source, feature_source, backbone_feature_source, soften_result, soften_proposal, feature_proposals \
             = calculate_roi_distillation_losses(model_source, model_target, images)
         # print('roi_distillation_losses: {0}'.format(roi_distillation_losses))
-    
-        rpn_distillation_losses = calculate_rpn_distillation_loss(rpn_output_source, rpn_output_target, cls_loss='filtered_l2', bbox_loss='l2', bbox_threshold=0.1)
+        if cfg_target.MODEL.RPN_DISTILL:
+            rpn_distillation_losses = calculate_rpn_distillation_loss(rpn_output_source, rpn_output_target, cls_loss='filtered_l2', bbox_loss='l2', bbox_threshold=0.1)
+        else:
+            rpn_distillation_losses = 0.
         # print('rpn_distillation_loss: {0}'.format(rpn_distillation_losses))
-       
-        feature_distillation_losses = calculate_feature_distillation_loss(feature_source, feature_target, loss='normalized_filtered_l1')
+        if cfg_target.MODEL.FEAT_DISTILL:
+            feature_distillation_losses = calculate_feature_distillation_loss(feature_source, feature_target, loss='normalized_filtered_l1')
+        else:
+            feature_distillation_losses = 0.
         # print('feature_distillation_loss: {0}'.format(feature_distillation_losses))
-
-        distillation_losses = roi_distillation_losses + rpn_distillation_losses + feature_distillation_losses
+        distillation_losses = rpn_distillation_losses + feature_distillation_losses
+        if cfg_target.MODEL.ROI_DISTILL:
+            distillation_losses += roi_distillation_losses
         # print('distillation_losses: {0}'.format(distillation_losses))
 
         distillation_dict = {}
@@ -133,10 +138,10 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             loss_median = meters.loss.median
             # print('loss global average: {0}, loss median: {1}'.format(meters.loss.global_avg, meters.loss.median))
             summary_writer.add_scalar('train_loss_global_avg', loss_global_avg, iteration)
-            summary_writer.add_scalar('train_loss_median', loss_median, iteration)
-            summary_writer.add_scalar('train_loss_raw', losses_reduced, iteration)
-            summary_writer.add_scalar('distillation_losses_raw', distillation_losses, iteration)
-            summary_writer.add_scalar('faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
+            # summary_writer.add_scalar('train_loss_median', loss_median, iteration)
+            # summary_writer.add_scalar('train_loss_raw', losses_reduced, iteration)
+            # summary_writer.add_scalar('distillation_losses_raw', distillation_losses, iteration)
+            # summary_writer.add_scalar('faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
             summary_writer.add_scalar('distillation_losses_avg', average_distillation_loss, iteration)
             summary_writer.add_scalar('faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
         # Every time meets the checkpoint_period, save the target model (parameters)
@@ -197,7 +202,7 @@ def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
 
     # train the model using overwrite function
     do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer)
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target)
 
     return model_target
 
