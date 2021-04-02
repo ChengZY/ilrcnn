@@ -20,7 +20,7 @@ MODEL:
     FEATURE_EXTRACTOR: "ResNet50Conv5ROIFeatureExtractor"
     PREDICTOR: "FastRCNNPredictor"
     NUM_CLASSES: 21 # total classes : 20 + 1
-    SPLIT: '15+5'
+    SPLIT: 'v155'
     INCREMENTAL: True
 
 DATASETS:

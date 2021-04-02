@@ -22,7 +22,8 @@ class PostProcessor(nn.Module):
         nms=0.5,
         detections_per_img=100,
         box_coder=None,
-        cls_agnostic_bbox_reg=False
+        cls_agnostic_bbox_reg=False,
+        cfg=None
     ):
         """
         Arguments:
@@ -39,6 +40,7 @@ class PostProcessor(nn.Module):
             box_coder = BoxCoder(weights=(10., 10., 5., 5.))
         self.box_coder = box_coder
         self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
+        self.cfg = cfg
 
     def forward(self, x, boxes):
         """
@@ -100,6 +102,7 @@ class PostProcessor(nn.Module):
         scores = scores.reshape(-1)
         boxlist = BoxList(boxes, image_shape, mode="xyxy")
         boxlist.add_field("scores", scores)
+        boxlist.add_field("softlabels", scores)
         return boxlist
 
     def filter_results(self, boxlist, num_classes):
@@ -110,6 +113,7 @@ class PostProcessor(nn.Module):
         # if we had multi-class NMS, we could perform this directly on the boxlist
         boxes = boxlist.bbox.reshape(-1, num_classes * 4)
         scores = boxlist.get_field("scores").reshape(-1, num_classes)
+        softlabels = boxlist.get_field("softlabels").reshape(-1, num_classes)
 
         device = scores.device
         result = []
@@ -122,6 +126,8 @@ class PostProcessor(nn.Module):
             boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
             boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
             boxlist_for_class.add_field("scores", scores_j)
+            softlabels_j = softlabels[inds, :]
+            boxlist_for_class.add_field("softlabels", softlabels_j)
             boxlist_for_class = boxlist_nms(
                 boxlist_for_class, self.nms
             )
@@ -162,6 +168,7 @@ def make_roi_box_post_processor(cfg):
         nms_thresh,
         detections_per_img,
         box_coder,
-        cls_agnostic_bbox_reg
+        cls_agnostic_bbox_reg,
+        cfg,
     )
     return postprocessor

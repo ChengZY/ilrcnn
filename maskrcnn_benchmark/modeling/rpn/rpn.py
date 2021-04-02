@@ -81,7 +81,7 @@ class RPNHead(nn.Module):
         """
         super(RPNHead, self).__init__()
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
-        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
+        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1) # 15
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=1, stride=1)
 
         for l in [self.conv, self.cls_logits, self.bbox_pred]:
@@ -142,7 +142,7 @@ class RPNModule(torch.nn.Module):
 
         anchor_generator = make_anchor_generator(cfg)
 
-        rpn_head = registry.RPN_HEADS[cfg.MODEL.RPN.RPN_HEAD]
+        rpn_head = registry.RPN_HEADS[cfg.MODEL.RPN.RPN_HEAD] # SingleConvRPNHead
         head = rpn_head(cfg, in_channels, anchor_generator.num_anchors_per_location()[0])
 
         rpn_box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))

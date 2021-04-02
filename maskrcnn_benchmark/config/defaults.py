@@ -34,7 +34,24 @@ _C.MODEL.CLS_AGNOSTIC_BBOX_REG = False
 # path
 _C.MODEL.WEIGHT = ""  # no pre-trained model
 
+# for ablation
+_C.MODEL.ROI_DISTILL = True
+_C.MODEL.RPN_DISTILL = True
+_C.MODEL.FEAT_DISTILL = True
+_C.MODEL.TOP_BOX_DISTILL = 64 # rpn proposals for roi distillation
+
+# EMA related
 _C.MODEL.MOMENTUM_COEF = 0.999
+
+# PSEUDO related
+_C.MODEL.PSEUDO = False
+_C.MODEL.PSEUDO_IOU_THRESH = 0.5
+_C.MODEL.PSEUDO_CONF_THRESH = 0.7
+_C.MODEL.TEMPERATURE = 3
+_C.MODEL.TEMPERATURE_MULTIPLE = False
+
+# DEBUG
+_C.MODEL.DEBUG = False
 # -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------

@@ -20,6 +20,7 @@ class ROIBoxHead(torch.nn.Module):
         self.predictor = make_roi_box_predictor(cfg, self.feature_extractor.out_channels)
         self.post_processor = make_roi_box_post_processor(cfg)
         self.loss_evaluator = make_roi_box_loss_evaluator(cfg)
+        self.cfg = cfg
 
     def forward(self, features, proposals, targets=None):
         """
@@ -52,6 +53,10 @@ class ROIBoxHead(torch.nn.Module):
             result = self.post_processor((class_logits, box_regression), proposals)
             return x, result, {}
 
+        if self.cfg.MODEL.PSEUDO:
+            loss_classifier, loss_box_reg, loss_softclassifier = self.loss_evaluator([class_logits], [box_regression])
+            return x, proposals, \
+                dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg, loss_softclassifier=loss_softclassifier)     
         loss_classifier, loss_box_reg = self.loss_evaluator([class_logits], [box_regression])
 
         return x, proposals, dict(loss_classifier=loss_classifier, loss_box_reg=loss_box_reg)

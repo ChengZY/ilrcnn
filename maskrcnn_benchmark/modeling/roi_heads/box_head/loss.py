@@ -23,7 +23,8 @@ class FastRCNNLossComputation(object):
         proposal_matcher, 
         fg_bg_sampler, 
         box_coder, 
-        cls_agnostic_bbox_reg=False
+        cls_agnostic_bbox_reg=False,
+        cfg=None,
     ):
         """
         Arguments:
@@ -35,12 +36,16 @@ class FastRCNNLossComputation(object):
         self.fg_bg_sampler = fg_bg_sampler
         self.box_coder = box_coder
         self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
+        self.cfg = cfg
 
     def match_targets_to_proposals(self, proposal, target):
         match_quality_matrix = boxlist_iou(target, proposal)
         matched_idxs = self.proposal_matcher(match_quality_matrix)
         # Fast RCNN only need "labels" field for selecting the targets
-        target = target.copy_with_fields("labels")
+        if self.cfg.MODEL.PSEUDO:
+            target = target.copy_with_fields(["labels", "is_gt", "softlabels"])
+        else:
+            target = target.copy_with_fields("labels")
         # get the targets corresponding GT for each proposal
         # NB: need to clamp the indices because we can have a single
         # GT in the image, and matched_idxs can be -2, which goes
@@ -52,6 +57,8 @@ class FastRCNNLossComputation(object):
     def prepare_targets(self, proposals, targets):
         labels = []
         regression_targets = []
+        is_gts = []
+        softlabels = []
         for proposals_per_image, targets_per_image in zip(proposals, targets):
             matched_targets = self.match_targets_to_proposals(
                 proposals_per_image, targets_per_image
@@ -68,7 +75,9 @@ class FastRCNNLossComputation(object):
             # Label ignore proposals (between low and high thresholds)
             ignore_inds = matched_idxs == Matcher.BETWEEN_THRESHOLDS
             labels_per_image[ignore_inds] = -1  # -1 is ignored by sampler
-
+            if self.cfg.MODEL.PSEUDO:
+                is_gts.append(matched_targets.get_field("is_gt"))
+                softlabels.append(matched_targets.get_field("softlabels"))
             # compute regression targets
             regression_targets_per_image = self.box_coder.encode(
                 matched_targets.bbox, proposals_per_image.bbox
@@ -77,6 +86,8 @@ class FastRCNNLossComputation(object):
             labels.append(labels_per_image)
             regression_targets.append(regression_targets_per_image)
 
+        if self.cfg.MODEL.PSEUDO:
+            return labels, regression_targets, is_gts, softlabels
         return labels, regression_targets
 
     def subsample(self, proposals, targets):
@@ -86,22 +97,37 @@ class FastRCNNLossComputation(object):
         Note: this function keeps a state.
 
         Arguments:
-            proposals (list[BoxList])
+            proposals (list[BoxList]) RPN output proposal
             targets (list[BoxList])
         """
-
-        labels, regression_targets = self.prepare_targets(proposals, targets)
+        if self.cfg.MODEL.PSEUDO:
+            labels, regression_targets, is_gts, softlabels = \
+                self.prepare_targets(proposals, targets)
+        else:
+            labels, regression_targets = self.prepare_targets(proposals, targets)
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
 
         proposals = list(proposals)
         # add corresponding label and regression_targets information to the bounding boxes
-        for labels_per_image, regression_targets_per_image, proposals_per_image in zip(
-            labels, regression_targets, proposals
-        ):
-            proposals_per_image.add_field("labels", labels_per_image)
-            proposals_per_image.add_field(
-                "regression_targets", regression_targets_per_image
-            )
+        if self.cfg.MODEL.PSEUDO:
+            for labels_per_image, regression_targets_per_image, proposals_per_image, \
+                is_gt_per_image, softlabel_per_image in \
+                zip(labels, regression_targets, proposals, is_gts, softlabels
+            ):
+                proposals_per_image.add_field("labels", labels_per_image)
+                proposals_per_image.add_field(
+                    "regression_targets", regression_targets_per_image
+                )
+                proposals_per_image.add_field("is_gts", is_gt_per_image)
+                proposals_per_image.add_field("softlabels", softlabel_per_image)
+        else:
+            for labels_per_image, regression_targets_per_image, proposals_per_image in zip(
+                labels, regression_targets, proposals
+            ):
+                proposals_per_image.add_field("labels", labels_per_image)
+                proposals_per_image.add_field(
+                    "regression_targets", regression_targets_per_image
+                )
 
         # distributed sampled proposals, that were obtained on all feature maps
         # concatenated via the fg_bg_sampler, into individual feature map levels
@@ -128,8 +154,6 @@ class FastRCNNLossComputation(object):
             classification_loss (Tensor)
             box_loss (Tensor)
         """
-        # print('box_head | loss.py | class_logits size {0}'.format(class_logits[0].size()))
-        # print('box_head | loss.py | box_regression size {0}'.format(box_regression[0].size()))
         class_logits = cat(class_logits, dim=0)
         box_regression = cat(box_regression, dim=0)
         device = class_logits.device
@@ -143,10 +167,25 @@ class FastRCNNLossComputation(object):
         regression_targets = cat(
             [proposal.get_field("regression_targets") for proposal in proposals], dim=0
         )
-        # if (labels>=20).sum().item() > 0:
-        #     print(labels)
-        #     from ipdb import set_trace; set_trace()
-        classification_loss = F.cross_entropy(class_logits, labels)
+        if self.cfg.MODEL.PSEUDO:
+            is_gts = cat([proposal.get_field("is_gts") for proposal in proposals], dim=0)
+            softlabels = cat([proposal.get_field("softlabels") for proposal in proposals], dim=0)
+            gt_mask = is_gts == 1
+
+            # pseudo label soft label kld
+            pseudo_softlabels = softlabels[~gt_mask]
+            num_softlabels = pseudo_softlabels.shape[1]
+            pseudo_classlabels = F.softmax(class_logits[~gt_mask][:, :num_softlabels] / self.cfg.MODEL.TEMPERATURE)
+            if pseudo_softlabels.shape[0] == 0: # 若没有pseudo box
+                pseudo_classification_loss = 0.
+            else:
+                if self.cfg.MODEL.TEMPERATURE_MULTIPLE:
+                    pseudo_classification_loss = F.kl_div(torch.log(pseudo_classlabels), pseudo_softlabels) * (self.cfg.MODEL.TEMPERATURE ** 2)
+                else:
+                    pseudo_classification_loss = F.kl_div(torch.log(pseudo_classlabels), pseudo_softlabels)
+            classification_loss = F.cross_entropy(class_logits[gt_mask], labels[gt_mask]) # gt label cls loss
+        else:
+            classification_loss = F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for the corresponding ground truth labels, to be used
         # with advanced indexing
@@ -165,6 +204,8 @@ class FastRCNNLossComputation(object):
         )
         box_loss = box_loss / labels.numel()
 
+        if self.cfg.MODEL.PSEUDO:
+            return classification_loss, box_loss, pseudo_classification_loss
         return classification_loss, box_loss
 
 
@@ -188,7 +229,8 @@ def make_roi_box_loss_evaluator(cfg):
         matcher, 
         fg_bg_sampler, 
         box_coder, 
-        cls_agnostic_bbox_reg
+        cls_agnostic_bbox_reg,
+        cfg,
     )
 
     return loss_evaluator

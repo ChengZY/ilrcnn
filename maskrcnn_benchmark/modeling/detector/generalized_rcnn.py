@@ -40,6 +40,7 @@ class GeneralizedRCNN(nn.Module):
         else:
             print('generalized_rcnn.py | Use external proposals.')
         self.roi_heads = build_roi_heads(cfg, self.backbone.out_channels)
+        self.cfg = cfg
 
     def forward(self, images, targets=None):
         """
@@ -122,16 +123,18 @@ class GeneralizedRCNN(nn.Module):
         proposal_mode = proposals[0].mode
         image_size = proposals[0].size
 
+        num_box_distill = self.cfg.MODEL.TOP_BOX_DISTILL
+        # print(num_box_distill)
         # choose first 128 highest objectness score proposals  and then random choose 64 proposals from them
-        if num_proposals < 64:
+        if num_proposals < num_box_distill:# 64:
             list = range(0, num_proposals, 1)
             selected_proposal_index = random.sample(list, num_proposals)
         elif num_proposals < 128:
             list = range(0, num_proposals, 1)
-            selected_proposal_index = random.sample(list, 64)
+            selected_proposal_index = random.sample(list, num_box_distill)# 64)
         else:
             list = range(0, 128, 1)
-            selected_proposal_index = random.sample(list, 64)
+            selected_proposal_index = random.sample(list, num_box_distill)# 64)
         # 获得选择的box的coord和score
         for i, element in enumerate(selected_proposal_index):
             if i == 0:

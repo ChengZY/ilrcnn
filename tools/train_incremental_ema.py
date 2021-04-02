@@ -116,13 +116,12 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         ## momentum update source model ##
         with torch.no_grad():
             for (name_src, param_src), (name_tgt, param_tgt) in zip(model_source.named_parameters(), model_target.named_parameters()):
-                if param_src.shape == param_tgt.shape:
+                if (param_src.shape == param_tgt.shape) and (not name_src.startswith('roi_heads.box')):
                     param_src.data = param_src * cfg_target.MODEL.MOMENTUM_COEF + param_tgt.data * (1. - cfg_target.MODEL.MOMENTUM_COEF)
                     # print(name_src, name_tgt, param_src.shape, param_tgt.shape)
                     # from ipdb import set_trace; set_trace()
             # for param_src, param_tgt in zip(model_source.parameters(), model_target.parameters()):
             #     from ipdb import set_trace; set_trace()
-            # print("ok")
 
         # time used to do one batch processing
         batch_time = time.time() - end

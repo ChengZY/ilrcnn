@@ -45,6 +45,7 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
              device, checkpoint_period, arguments_source, arguments_target, summary_writer):
 
@@ -60,6 +61,9 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
     end = time.time()
     average_distillation_loss = 0
     average_faster_rcnn_loss = 0
+    average_rpn_distill_loss = 0
+    average_feat_distill_loss = 0
+    average_rcnn_distill_loss = 0
 
     for iteration, (images, targets, _, idx) in enumerate(data_loader, start_iter):
 
@@ -76,8 +80,7 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
 
         roi_distillation_losses, rpn_output_source, feature_source, backbone_feature_source, soften_result, soften_proposal, feature_proposals \
             = calculate_roi_distillation_losses(model_source, model_target, images)
-        # print('roi_distillation_losses: {0}'.format(roi_distillation_losses))
-    
+
         rpn_distillation_losses = calculate_rpn_distillation_loss(rpn_output_source, rpn_output_target, cls_loss='filtered_l2', bbox_loss='l2', bbox_threshold=0.1)
         # print('rpn_distillation_loss: {0}'.format(rpn_distillation_losses))
        
@@ -89,6 +92,9 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
 
         distillation_dict = {}
         distillation_dict['distillation_loss'] = distillation_losses.clone().detach()
+        # distillation_dict['rpn_distill_loss'] = rpn_distillation_losses.clone().detach()
+        # distillation_dict['feat_distill_loss'] = feature_distillation_losses.clone().detach()
+        # distillation_dict['rcnn_distill_loss'] = roi_distillation_losses.clone().detach()
         loss_dict_target.update(distillation_dict)
         # print('loss_dict_target: {0}'.format(loss_dict_target))
 
@@ -103,9 +109,15 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         if (iteration - 1) > 0:
             average_distillation_loss = (average_distillation_loss * (iteration - 1) + distillation_losses) / iteration
             average_faster_rcnn_loss = (average_faster_rcnn_loss * (iteration - 1) + faster_rcnn_losses) /iteration
+            average_rpn_distill_loss = (average_rpn_distill_loss * (iteration - 1) + rpn_distillation_losses) / iteration
+            average_feat_distill_loss = (average_feat_distill_loss * (iteration - 1) + feature_distillation_losses) / iteration
+            average_rcnn_distill_loss = (average_rcnn_distill_loss * (iteration - 1) + roi_distillation_losses) / iteration
         else:
             average_distillation_loss = distillation_losses
             average_faster_rcnn_loss = faster_rcnn_losses
+            average_rpn_distill_loss = rpn_distillation_losses
+            average_feat_distill_loss = feature_distillation_losses
+            average_rcnn_distill_loss = roi_distillation_losses
 
         optimizer.zero_grad()  # clear the gradient cache
         # If mixed precision is not used, this ends up doing nothing, otherwise apply loss scaling for mixed-precision recipe.
@@ -131,14 +143,15 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             # write to tensorboardX
             loss_global_avg = meters.loss.global_avg
             loss_median = meters.loss.median
-            # print('loss global average: {0}, loss median: {1}'.format(meters.loss.global_avg, meters.loss.median))
-            summary_writer.add_scalar('train_loss_global_avg', loss_global_avg, iteration)
-            summary_writer.add_scalar('train_loss_median', loss_median, iteration)
-            summary_writer.add_scalar('train_loss_raw', losses_reduced, iteration)
-            summary_writer.add_scalar('distillation_losses_raw', distillation_losses, iteration)
-            summary_writer.add_scalar('faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
-            summary_writer.add_scalar('distillation_losses_avg', average_distillation_loss, iteration)
-            summary_writer.add_scalar('faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
+            summary_writer.add_scalar('raw_loss/train_loss_raw', losses_reduced, iteration)
+            summary_writer.add_scalar('raw_loss/distillation_losses_raw', distillation_losses, iteration)
+            summary_writer.add_scalar('raw_loss/faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
+            summary_writer.add_scalar('avg_loss/train_loss_global_avg', loss_global_avg, iteration)
+            summary_writer.add_scalar('avg_loss/distillation_losses_avg', average_distillation_loss, iteration)
+            summary_writer.add_scalar('avg_loss/faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
+            summary_writer.add_scalar('distill_loss/rpn_distill_avg', average_rpn_distill_loss, iteration)
+            summary_writer.add_scalar('distill_loss/feat_distill_avg', average_feat_distill_loss, iteration)
+            summary_writer.add_scalar('distill_loss/rcnn_distill_avg', average_rcnn_distill_loss, iteration)
         # Every time meets the checkpoint_period, save the target model (parameters)
         if iteration % checkpoint_period == 0:
             checkpointer_target.save("model_{:07d}".format(iteration), **arguments_target)

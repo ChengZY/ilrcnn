@@ -218,7 +218,6 @@ class PascalVOCDataset(torch.utils.data.Dataset):
 
         if self.transforms is not None:
             img, target, proposal = self.transforms(img, target, proposal)
-
         return img, target, proposal, index
 
     def __len__(self):
@@ -227,8 +226,10 @@ class PascalVOCDataset(torch.utils.data.Dataset):
     def get_groundtruth(self, index):
         img_id = self.final_ids[index]
         anno = ET.parse(self._annopath % img_id).getroot()
-        anno = self._preprocess_annotation(anno) # {'boxes': tensor, "labels": tensor, "difficult": tensor, "im_info":xx}
-
+        if self.cfg.MODEL.DEBUG:
+            anno = self._preprocess_full_annotation(anno) # {'boxes': tensor, "labels": tensor, "difficult": tensor, "im_info":xx}
+        else:
+            anno = self._preprocess_annotation(anno)
         height, width = anno["im_info"]
         self._img_height = height
         self._img_width = width
@@ -336,6 +337,59 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         img_id = self.final_ids[index]
         return img_id
 
+    def _preprocess_full_annotation(self, target):
+        boxes = []
+        gt_classes = []
+        difficult_boxes = []
+        TO_REMOVE = 1
+
+        for obj in target.iter("object"):
+            difficult = int(obj.find("difficult").text) == 1
+            if not self.keep_difficult and difficult:
+                continue
+            name = obj.find("name").text.lower().strip()
+            # 如果该图片中的gt box是old class/exclude class，则不添加到gt box的list中
+            old_class_flag = False
+            for old in self.old_classes:
+                if name == old:
+                    old_class_flag = True
+                    break
+            exclude_class_flag = False
+            for exclude in self.exclude_classes:
+                if name == exclude:
+                    exclude_class_flag = True
+                    break
+
+            bb = obj.find("bndbox")
+            # Make pixel indexes 0-based
+            # Refer to "https://github.com/rbgirshick/py-faster-rcnn/blob/master/lib/datasets/pascal_voc.py#L208-L211"
+            box = [bb.find("xmin").text, bb.find("ymin").text, bb.find("xmax").text, bb.find("ymax").text]
+            bndbox = tuple(map(lambda x: x - TO_REMOVE, list(map(int, box))))
+
+            if exclude_class_flag:
+                # print('voc.py | incremental train | object category belongs to exclude categoires: {0}'.format(name))
+                pass
+            elif self.is_train and old_class_flag:
+                # print('voc.py | incremental train | object category belongs to old categoires: {0}'.format(name))
+                # ! still append for debug, not for training
+                boxes.append(bndbox)
+                gt_classes.append(self.class_to_ind[name])
+                difficult_boxes.append(difficult)
+            else:
+                boxes.append(bndbox)
+                gt_classes.append(self.class_to_ind[name])
+                difficult_boxes.append(difficult)
+
+        size = target.find("size")
+        im_info = tuple(map(int, (size.find("height").text, size.find("width").text)))
+
+        res = {
+            "boxes": torch.tensor(boxes, dtype=torch.float32),
+            "labels": torch.tensor(gt_classes),
+            "difficult": torch.tensor(difficult_boxes),
+            "im_info": im_info,
+        }
+        return res
 
 def main():
     data_dir = "/home/DATA/VOC2007"
