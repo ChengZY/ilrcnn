@@ -14,12 +14,15 @@ from ..utils.comm import synchronize
 from ..utils.timer import Timer, get_time_str
 
 
-def compute_on_dataset(model, data_loader, device, timer=None, external_proposal=False):
+def compute_on_dataset(model, data_loader, device, timer=None, external_proposal=False, multi_teacher=False):
     model.eval()
     results_dict = {}
     cpu_device = torch.device("cpu")
     for _, batch in enumerate(tqdm(data_loader)):  # tqdm is used to provide progress bar
-        images, targets, proposals, image_ids = batch
+        if multi_teacher:
+            images, targets, proposals, image_ids, _ = batch
+        else:
+            images, targets, proposals, image_ids = batch
 
         # load images and proposals to gpu
         images = images.to(device)
@@ -65,7 +68,8 @@ def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
 
 
 def inference(model, data_loader, dataset_name, iou_types=("bbox",), box_only=False, device="cuda",
-        expected_results=(), expected_results_sigma_tol=4, output_folder=None, external_proposal=False, alphabetical_order=False):
+        expected_results=(), expected_results_sigma_tol=4, output_folder=None, external_proposal=False, alphabetical_order=False,
+        multi_teacher=False):
 
     print('inference.py | alphabetical_order: {0}'.format(alphabetical_order))
     # convert to a torch.device for efficiency
@@ -77,7 +81,7 @@ def inference(model, data_loader, dataset_name, iou_types=("bbox",), box_only=Fa
     total_timer = Timer()
     inference_timer = Timer()
     total_timer.tic()
-    predictions = compute_on_dataset(model, data_loader, device, inference_timer, external_proposal)
+    predictions = compute_on_dataset(model, data_loader, device, inference_timer, external_proposal, multi_teacher)
     # from ipdb import set_trace; set_trace()
     # wait for all processes to complete before measuring the time
     synchronize()

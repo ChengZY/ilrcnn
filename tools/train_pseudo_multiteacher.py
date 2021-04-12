@@ -50,10 +50,7 @@ from maskrcnn_benchmark.data.transforms import trans_reverse
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.utils.ensemble_boxes_wbf import weighted_boxes_fusion, visual_ens_box, visual_multi_iter_box
 import copy
-# from ensemble_boxes import weighted_boxes_fusion
-# ROOT = "/home/zhengkai/maskrcnn-benchmark/datasets/voc/VOC2007"
-# annopath = os.path.join(ROOT, "Annotations", "%s.xml")
-# imgpath = os.path.join(ROOT, "JPEGImages", "%s.jpg")
+
 
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
              device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target, cfg_source):
@@ -422,7 +419,8 @@ def test(cfg_target, model, distributed):
                   expected_results=cfg_target.TEST.EXPECTED_RESULTS,
                   expected_results_sigma_tol=cfg_target.TEST.EXPECTED_RESULTS_SIGMA_TOL,
                   output_folder=output_folder,
-                  alphabetical_order=cfg_target.TEST.COCO_ALPHABETICAL_ORDER)
+                  alphabetical_order=cfg_target.TEST.COCO_ALPHABETICAL_ORDER,
+                  multi_teacher=cfg_target.MODEL.MULTI_TEACHER)
         # synchronize function for multiple gpu inference
         synchronize()
 
