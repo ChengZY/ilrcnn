@@ -215,10 +215,15 @@ class PascalVOCDataset(torch.utils.data.Dataset):
             proposal = None
 
         # draw_image(img, target, proposal, "{0}_{1}_voc_getitem".format(index, img_id))
-
+        restore_list = []
         if self.transforms is not None:
-            img, target, proposal = self.transforms(img, target, proposal)
+            if self.cfg.MODEL.MULTI_TEACHER:
+                img, target, proposal, restore_list = self.transforms(img, target, proposal)
+            else:
+                img, target, proposal = self.transforms(img, target, proposal)
 
+        if self.cfg.MODEL.MULTI_TEACHER:
+            return img, target, proposal, index, restore_list
         return img, target, proposal, index
 
     def __len__(self):

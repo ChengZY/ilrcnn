@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 from . import transforms as T
-
+from . import transforms_inv as T_I
 
 def build_transforms(cfg, is_train=True):
     if is_train:
@@ -20,16 +20,21 @@ def build_transforms(cfg, is_train=True):
         saturation = 0.0
         hue = 0.0
 
-    to_bgr255 = cfg.INPUT.TO_BGR255
-    normalize_transform = T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255)
-    color_jitter = T.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue)
+    if cfg.MODEL.MULTI_TEACHER:
+        TRANS = T_I
+    else:
+        TRANS = T
 
-    transform = T.Compose(
+    to_bgr255 = cfg.INPUT.TO_BGR255
+    normalize_transform = TRANS.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255)
+    color_jitter = TRANS.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue)
+
+    transform = TRANS.Compose(
         [
             color_jitter,  # modify brightness, contrast & saturation
-            T.Resize(min_size, max_size),
-            T.RandomHorizontalFlip(flip_prob),  # horizontally flip the image in percentage of 0.5
-            T.ToTensor(),  # convert to tensor
+            TRANS.Resize(min_size, max_size),
+            TRANS.RandomHorizontalFlip(flip_prob),  # horizontally flip the image in percentage of 0.5
+            TRANS.ToTensor(),  # convert to tensor
             normalize_transform,
         ]
     )

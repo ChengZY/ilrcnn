@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "/home/incremental_learning_ResNet50_C4/coco/first_70/model_final.pth"
+  WEIGHT: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/15_5_new_split/first_step/model_final.pth"
   BACKBONE:
     CONV_BODY: "R-50-C4"
   RESNETS:
@@ -20,10 +20,16 @@ MODEL:
     POOLER_SAMPLING_RATIO: 0
     FEATURE_EXTRACTOR: "ResNet50Conv5ROIFeatureExtractor"
     PREDICTOR: "FastRCNNPredictor"
-    NUM_CLASSES: 71 # total classes
+    NUM_CLASSES: 16 # 11 # total classes : 10 + 1
+    # NAME_OLD_CLASSES: ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog",
+    #                    "horse", "motorbike", "person"]
+    # NAME_NEW_CLASSES: ["pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+    # NAME_EXCLUDED_CLASSES: []
+    SPLIT: '15+5'
+    INCREMENTAL: True
 DATASETS:
-  TRAIN: ("coco_2014_train", "coco_2014_valminusminival")  # 80k + 35k
-  TEST: ("coco_2014_minival",)  # 5k
+  TRAIN: ("voc_2007_train", "voc_2007_val")
+  TEST: ("voc_2007_test",)
 DATALOADER:
   SIZE_DIVISIBILITY: 0
 SOLVER:
@@ -37,5 +43,5 @@ SOLVER:
   MOMENTUM: 0.9
 TEST: # testing strategy
   IMS_PER_BATCH: 1 # number of images per batch
-OUTPUT_DIR: "/home/incremental_learning_ResNet50_C4/coco/70_10/source" # path to store the result
-TENSORBOARD_DIR: "/home/incremental_learning_ResNet50_C4/coco/70_10/source/tensorboard"
+# OUTPUT_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source" # path to store the result
+# TENSORBOARD_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source/tensorboard"

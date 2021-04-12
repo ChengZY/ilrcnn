@@ -43,12 +43,14 @@ _C.MODEL.LOW_BOUND = _C.MODEL.PSEUDO_CONF_THRESH
 _C.MODEL.LABEL_TYPE = "hard" # ["soft", "label"]
 _C.MODEL.SOFT_WEIGHT = 2.
 _C.MODEL.SOFT_AUTO_WEIGHT = False
-
+_C.MODEL.MULTI_TEACHER = False # if multi teacher, activate inverse transform
+_C.MODEL.SAVE_PRED_PERIOD = 50
+_C.MODEL.ENSEMBLE_NUM = 5
 # Faster-ILOD distillation ablation
 _C.MODEL.ROI_DISTILL = True
 _C.MODEL.RPN_DISTILL = True
 _C.MODEL.FEAT_DISTILL = True
-
+_C.MODEL.MOMENTUM_COEF = 0.999
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for
 # the path in paths_catalog. Else, it will use it as the specified absolute
 # path

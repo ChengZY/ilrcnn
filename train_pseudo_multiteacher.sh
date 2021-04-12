@@ -31,7 +31,5 @@ set -x
 
 # python tools/trim_detectron_model.py \
 #    --config-file $YML
-#    --pretrained_path /home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/RPN_19_classes_40k_steps_no_person/model_final.pth \
-#    --save_path /home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/RPN_19_classes_40k_steps_no_person/model_trim_optimizer_iteration.pth
 
-python tools/train_pseudo3.py --src-file $SRC_YML --tat-file $TAT_YML
+python tools/train_pseudo_multiteacher.py --src-file $SRC_YML --tat-file $TAT_YML
