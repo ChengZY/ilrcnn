@@ -66,7 +66,7 @@ def do_train(
 
         images = images.to(device)
         targets = [target.to(device) for target in targets]
-
+        # from ipdb import set_trace; set_trace()
         loss_dict = model(images, targets)[0] # get loss_dict from 5-len tuple
         # set_trace()
         losses = sum(loss for loss in loss_dict.values())

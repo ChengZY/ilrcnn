@@ -19,17 +19,13 @@ echo "source file: $SRC_YML"
 echo "target file: $TAT_YML"
 
 set -x
-# python -m torch.distributed.launch --nproc_per_node=$nr_gpu tools/train_first_step.py \
-#     --config-file ./configs/e2e_faster_rcnn_R_50_C4_1x.yaml \
-#     MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN $fpn_post_nms_top_n_train \
-#     SOLVER.IMS_PER_BATCH $ims_per_batch
 
-# python tools/train_first_step.py \
-#     --config-file $YML \
-#     MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN $fpn_post_nms_top_n_train \
-#     SOLVER.IMS_PER_BATCH $ims_per_batch
+python tools/train_first_step.py \
+    --config-file $YML \
+    MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN $fpn_post_nms_top_n_train \
+    SOLVER.IMS_PER_BATCH $ims_per_batch
 
-# python tools/trim_detectron_model.py \
-#    --config-file $YML
+python tools/trim_detectron_model.py \
+   --config-file $YML
 
 python tools/train_pseudo3.py --src-file $SRC_YML --tat-file $TAT_YML

@@ -48,6 +48,8 @@ from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from collections import Counter
 CATEGORIES = ["__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
             "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+from tqdm import tqdm
+from maskrcnn_benchmark.data import make_dummy_data_loader  # import data set
 
 def vis_pred(images, targets, src_pred):
     # images: ImageList images.tensors.shape, images.image_sizes
@@ -99,15 +101,15 @@ def stat_pred(images, src_pred):
 
 
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target):
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target, dummy_data_loader):
 
     # record log information
     logger = logging.getLogger("maskrcnn_benchmark_target_model.trainer")
     logger.info("Start training")
     meters = MetricLogger(delimiter="  ")  # used to record
     max_iter = len(data_loader)  # data loader rewrites the len() function and allows it to return the number of batches (cfg.SOLVER.MAX_ITER)
-    print("++++++" * 5)
-    print(max_iter)
+    # print("++++++" * 5)
+    # print(max_iter)
     start_iter = arguments_target["iteration"]  # 0
     model_target.train()  # set the target model in training mode
     model_source.eval()  # set the source model in inference mode
@@ -119,6 +121,54 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
     if args.stat:
         pred_catlist = []
 
+    # find median confidence for each class
+    score_dicts = {}
+    median_dict = {}
+    BAD_THRESH = 0.3
+    print("=> Start to Find Median")
+    if dummy_data_loader is not None:
+        for it, (images, targets, _, idx) in enumerate(tqdm(dummy_data_loader)):
+            images = images.to(device)
+            targets = [target.to(device) for target in targets]
+            src_pred, _, _ = model_source(images)
+
+            for pred in src_pred:
+                pred_scores = pred.get_field("scores")
+                pred_labels = pred.get_field("labels")
+
+                unique_labels = torch.unique(pred_labels)
+                for x in unique_labels:
+                    sel = pred_labels == x
+                    sel_scores = pred_scores[sel].tolist()
+                    if x.item() in score_dicts.keys():
+                        score_dicts[x.item()].extend(sel_scores)
+                    else:
+                        print("Add class {} into dict".format(x.item()))
+                        score_dicts[x.item()] = sel_scores
+        print("=> Finish Find Median")
+        for x in score_dicts.keys():
+            newlist = list(filter(lambda x:x>BAD_THRESH, score_dicts[x]))
+            score_dicts[x] = newlist
+            print("{}: #{}, median: {:.2f}, mean: {:.2f}".format(x, len(newlist), np.median(newlist), np.mean(newlist)))
+            median_dict[x] = np.median(newlist)
+    """
+    3: #113, median: 0.75, mean: 0.71
+    10: #341, median: 0.72, mean: 0.69
+    12: #482, median: 0.73, mean: 0.71
+    13: #604, median: 0.87, mean: 0.75
+    9: #1958, median: 0.58, mean: 0.62
+    8: #112, median: 0.69, mean: 0.68
+    15: #492, median: 0.71, mean: 0.68
+    1: #162, median: 0.56, mean: 0.61
+    7: #879, median: 0.84, mean: 0.75
+    14: #588, median: 0.76, mean: 0.72
+    5: #452, median: 0.88, mean: 0.77
+    11: #654, median: 0.57, mean: 0.61
+    4: #267, median: 0.56, mean: 0.62
+    2: #571, median: 0.84, mean: 0.75
+    6: #518, median: 0.68, mean: 0.67
+    """
+    
     for iteration, (images, targets, _, idx) in enumerate(data_loader, start_iter):
 
         data_time = time.time() - end
@@ -130,7 +180,7 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         targets = [target.to(device) for target in targets]  # move targets (labels) to the device
         
         # source model prediction
-        src_pred = model_source(images)[0]
+        src_pred, _, _ = model_source(images)
 
         # 可视化过滤pred box之前的所有pred box
         # if args.vis:
@@ -145,8 +195,16 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             targets: BoxList -> bbox, size, mode, extra_fields, difficult
             """
             pred_scores = pred.get_field("scores")
-            keep = torch.nonzero(pred_scores > cfg_target.MODEL.PSEUDO_CONF_THRESH).squeeze(1)
-            pred = pred[keep]
+            pred_labels = pred.get_field("labels")
+            if dummy_data_loader is not None:
+                median_list = [median_dict[x] for x in pred_labels.tolist()]
+                median_tensor = torch.tensor(median_list).to(device)
+                keep = pred_scores > median_tensor
+                # print("keep: {}/{}".format(keep.sum().item(), len(keep)))
+                pred = pred[keep]
+            else:
+                keep = torch.nonzero(pred_scores > cfg_target.MODEL.PSEUDO_CONF_THRESH).squeeze(1)
+                pred = pred[keep]
             
             with torch.no_grad():
                 if len(pred) > 0:
@@ -261,13 +319,13 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             loss_global_avg = meters.loss.global_avg
             loss_median = meters.loss.median
             # print('loss global average: {0}, loss median: {1}'.format(meters.loss.global_avg, meters.loss.median))
-            summary_writer.add_scalar('train_loss_global_avg', loss_global_avg, iteration)
-            summary_writer.add_scalar('train_loss_median', loss_median, iteration)
-            summary_writer.add_scalar('train_loss_raw', losses_reduced, iteration)
+            summary_writer.add_scalar('avg/train_loss_global_avg', loss_global_avg, iteration)
+            # summary_writer.add_scalar('train_loss_median', loss_median, iteration)
+            # summary_writer.add_scalar('train_loss_raw', losses_reduced, iteration)
             # summary_writer.add_scalar('distillation_losses_raw', distillation_losses, iteration)
-            summary_writer.add_scalar('faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
+            summary_writer.add_scalar('raw/faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
             # summary_writer.add_scalar('distillation_losses_avg', average_distillation_loss, iteration)
-            summary_writer.add_scalar('faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
+            summary_writer.add_scalar('avg/faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
         # Every time meets the checkpoint_period, save the target model (parameters)
         if iteration % checkpoint_period == 0:
             checkpointer_target.save("model_{:07d}".format(iteration), **arguments_target)
@@ -332,13 +390,16 @@ def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
     print('start iteration: {0}'.format(arguments_target["iteration"]))
     # load training data
     data_loader = make_data_loader(cfg_target, is_train=True, is_distributed=distributed, start_iter=arguments_target["iteration"])
+    dummy_data_loader = None
+    if cfg_target.MODEL.FIND_MEDIAN:
+        dummy_data_loader = make_dummy_data_loader(cfg_target, is_train=True, is_distributed=distributed)
     print('finish loading data')
     # number of iteration to store parameter value in pth file
     checkpoint_period = cfg_target.SOLVER.CHECKPOINT_PERIOD
 
     # train the model using overwrite function
     do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target)
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target, dummy_data_loader)
 
     return model_target
 

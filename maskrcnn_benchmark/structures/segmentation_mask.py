@@ -411,6 +411,8 @@ class PolygonList(object):
         return len(self.polygons)
 
     def __getitem__(self, item):
+        # from ipdb import set_trace; set_trace()
+        # print("****: ", item, len(item), len(self.polygons))
         if isinstance(item, int):
             selected_polygons = [self.polygons[item]]
         elif isinstance(item, slice):
@@ -422,8 +424,10 @@ class PolygonList(object):
                 item = item.nonzero()
                 item = item.squeeze(1) if item.numel() > 0 else item
                 item = item.tolist()
+                # print("xxx ", item)
             for i in item:
                 selected_polygons.append(self.polygons[i])
+        # from ipdb import set_trace; set_trace()
         return PolygonList(selected_polygons, size=self.size)
 
     def __iter__(self):

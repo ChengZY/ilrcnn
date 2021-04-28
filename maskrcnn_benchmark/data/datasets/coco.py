@@ -9,9 +9,12 @@ from maskrcnn_benchmark.structures.keypoint import PersonKeypoints
 # first 40 categories: 1 ~ 44; first 70 categories: 1 ~ 79; first 75 categories: 1 ~ 85
 # second 40 categories: 45 ~ 91; second 10 categories: 80 ~ 91; second 5 categories: 86 ~ 91
 # totally 80 categories
-NUM_OLD_CATEGORY = 70  # do not include background
-NUM_NEW_CATEGORY = 10  # number of added categories
-
+## first step
+NUM_OLD_CATEGORY = 0  # do not include background
+NUM_NEW_CATEGORY = 70  # number of added categories
+## incremental step
+# NUM_OLD_CATEGORY = 70  # do not include background
+# NUM_NEW_CATEGORY = 10  # number of added categories
 
 COCO_VOC_CATS = ['__background__', 'airplane', 'bicycle', 'bird', 'boat',
                  'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'dining table',
@@ -187,6 +190,7 @@ def test_image_annotation(anno):
 class COCODataset(torchvision.datasets.coco.CocoDetection):
 
     def __init__(self, ann_file, root, remove_images_without_annotations, transforms=None, is_train=True):
+        print("=> ", ann_file)
         super(COCODataset, self).__init__(root, ann_file)
         # sort indices for reproducible results
         self.ids = sorted(self.ids)
@@ -251,9 +255,10 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
         classes = torch.tensor(classes)
         target.add_field("labels", classes)
 
-        masks = [obj["segmentation"] for obj in anno]
-        masks = SegmentationMask(masks, img.size, mode='poly')
-        target.add_field("masks", masks)
+        if anno and "segmentation" in anno[0]:
+            masks = [obj["segmentation"] for obj in anno]
+            masks = SegmentationMask(masks, img.size, mode='poly')
+            target.add_field("masks", masks)
 
         if anno and "keypoints" in anno[0]:
             keypoints = [obj["keypoints"] for obj in anno]

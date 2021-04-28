@@ -96,7 +96,7 @@ class Checkpointer(object):
         return torch.load(f, map_location=torch.device("cpu"))
 
     def _load_model(self, checkpoint):
-        load_state_dict(self.model, checkpoint.pop("model"))
+        load_state_dict(self.model, checkpoint.pop("model"), proto_enable=self.cfg.MODEL.PROTO_ON)
 
 
 class DetectronCheckpointer(Checkpointer):

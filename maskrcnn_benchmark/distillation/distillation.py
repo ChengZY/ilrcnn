@@ -10,7 +10,7 @@ import numpy as np
 
 from maskrcnn_benchmark.modeling.rpn.utils import permute_and_flatten
 from maskrcnn_benchmark.layers import smooth_l1_loss
-
+import math
 
 def calculate_rpn_distillation_loss(rpn_output_source, rpn_output_target, cls_loss=None, bbox_loss=None, bbox_threshold=None):
 
@@ -187,6 +187,71 @@ def calculate_roi_distillation_losses(model_source, model_target, images):
 
     return roi_distillation_losses, rpn_output_source, feature_source, backbone_feature_source, soften_result, soften_proposal, feature_proposals
 
+def _local_pod(x, spp_scales=[1, 2, 4], normalize=False, normalize_per_scale=False):
+    b = x.shape[0]
+    w = x.shape[-1]
+    h = x.shape[-2]
+    emb = []
 
+    for scale_index, scale in enumerate(spp_scales):
+        kw = w // scale
+        kh = h // scale
+        nb_regions = scale**2
 
+        for i in range(scale):
+            for j in range(scale):
+                tensor = x[..., i * kh:(i + 1) * kh, j * kw:(j + 1) * kw]
 
+                horizontal_pool = tensor.mean(dim=3).view(b, -1)
+                vertical_pool = tensor.mean(dim=2).view(b, -1)
+
+                if normalize_per_scale is True: # F
+                    horizontal_pool = horizontal_pool / nb_regions
+                    vertical_pool = vertical_pool / nb_regions
+                elif normalize_per_scale == "spm": # F
+                    if scale_index == 0:
+                        factor = 2 ** (len(spp_scales) - 1)
+                    else:
+                        factor = 2 ** (len(spp_scales) - scale_index)
+                    horizontal_pool = horizontal_pool / factor
+                    vertical_pool = vertical_pool / factor
+
+                if normalize: # F
+                    horizontal_pool = F.normalize(horizontal_pool, dim=1, p=2)
+                    vertical_pool = F.normalize(vertical_pool, dim=1, p=2)
+
+                emb.append(horizontal_pool)
+                emb.append(vertical_pool)
+                if (horizontal_pool != horizontal_pool).sum() > 0.:
+                    print(scale_index, i, j)
+                    from ipdb import set_trace; set_trace()
+                if (vertical_pool != vertical_pool).sum() > 0:
+                    print(scale_index, i, j)
+                    from ipdb import set_trace; set_trace()
+    return torch.cat(emb, dim=1)
+
+def cal_layer_distillation_loss(source_features, target_features, all_new_ratio, base_factor=0.01):
+    """
+    source/target_features: len=3: (N,C,H,W) [(1,256,h1,w1),(1,512,h2,w2),(1,1024,h3,w3)]
+    """
+    # TODO: resnet50只有3个layer，且没有加stem的输出
+    assert len(source_features) == len(target_features)
+
+    loss = 0
+    for i, (src, tgt) in enumerate(zip(source_features, target_features)):
+        assert src.shape == tgt.shape, (src.shape, tgt.shape)
+        # print("=> ", i)
+        # preprocess features
+        src = torch.pow(src, 2) # feature ^ 2
+        tgt = torch.pow(tgt, 2)
+        # local pooling
+        src = _local_pod(src)
+        tgt = _local_pod(tgt)
+        # from ipdb import set_trace; set_trace()
+        layer_loss = torch.frobenius_norm(src - tgt, dim=-1) # L2 loss?
+        layer_loss = torch.mean(layer_loss)
+        layer_loss = layer_loss * math.sqrt(all_new_ratio)
+
+        loss += base_factor * layer_loss
+        
+    return loss / len(source_features)

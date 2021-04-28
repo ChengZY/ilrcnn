@@ -26,8 +26,9 @@ _C.MODEL.MASK_ON = False
 _C.MODEL.RETINANET_ON = False
 _C.MODEL.KEYPOINT_ON = False
 _C.MODEL.PROTO_ON = False
+_C.MODEL.STORAGE_ENABLE = False
 _C.MODEL.HIDDEN_DIM = 128
-_C.MODEL.QLEN = 256
+_C.MODEL.QLEN = 65536
 _C.MODEL.CONTRAST_IOU_THRES = 0.5
 _C.MODEL.TEMPERATURE = 0.2
 _C.MODEL.REWEIGHT_TYPE = 'none' # 'identity'
@@ -46,11 +47,16 @@ _C.MODEL.SOFT_AUTO_WEIGHT = False
 _C.MODEL.MULTI_TEACHER = False # if multi teacher, activate inverse transform
 _C.MODEL.SAVE_PRED_PERIOD = 50
 _C.MODEL.ENSEMBLE_NUM = 5
+_C.MODEL.ENSEMBLE_CONF_THRESH = 0.5
 # Faster-ILOD distillation ablation
 _C.MODEL.ROI_DISTILL = True
 _C.MODEL.RPN_DISTILL = True
 _C.MODEL.FEAT_DISTILL = True
 _C.MODEL.MOMENTUM_COEF = 0.999
+_C.MODEL.LAYER_DISTILL = False
+_C.MODEL.LAYER_FACTOR = 0.01
+
+_C.MODEL.FIND_MEDIAN = False
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for
 # the path in paths_catalog. Else, it will use it as the specified absolute
 # path

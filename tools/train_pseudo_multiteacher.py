@@ -179,7 +179,7 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             gt.extra_fields['difficult'] = torch.cat([gt.extra_fields['difficult'], torch.zeros((ens_labels.shape[0],)).to(device).to(torch.uint8)], dim=0)
             mid_num = gt.bbox.shape[0]
             # START to filter fusion box again (only on confidence threshold, set the confidence threshold a bit lower)
-            keep = torch.nonzero(gt.get_field("scores") > cfg_target.MODEL.PSEUDO_CONF_THRESH - 0.2).squeeze(1)
+            keep = torch.nonzero(gt.get_field("scores") > cfg_target.MODEL.ENSEMBLE_CONF_THRESH).squeeze(1)
             gt = gt[keep]
             targets[i] = gt
             after_num = gt.bbox.shape[0]

@@ -205,6 +205,7 @@ class BoxList(object):
     def __getitem__(self, item):
         bbox = BoxList(self.bbox[item], self.size, self.mode)
         for k, v in self.extra_fields.items():
+            # print(item, k, v)
             bbox.add_field(k, v[item])
         return bbox
 
@@ -220,8 +221,12 @@ class BoxList(object):
 
         if remove_empty:
             box = self.bbox
-            keep = (box[:, 3] > box[:, 1]) & (box[:, 2] > box[:, 0])
-            return self[keep]
+            keep = (box[:, 3] > box[:, 1]) & (box[:, 2] > box[:, 0]) # uint8
+            # from ipdb import set_trace; set_trace()
+            # keep = torch.nonzero(keep).squeeze(1) # add by @zhengkai, need indices
+            # print("=> BoxNumber: ", box.shape[0], "keep index: ", keep)
+            # print("==>", keep, len(self))
+            return self[keep.to(torch.bool)]
         return self
 
     def area(self):

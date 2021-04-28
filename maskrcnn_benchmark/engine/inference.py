@@ -35,7 +35,7 @@ def compute_on_dataset(model, data_loader, device, timer=None, external_proposal
             if external_proposal:  # use external proposals
                 output = model.use_external_proposals_edgeboxes(images, proposals)
             else:
-                output, features = model(images) # output-> list(BoxList)
+                output, features, _ = model(images) # output-> list(BoxList)
                 # from ipdb import set_trace; set_trace()
             if timer:
                 torch.cuda.synchronize()

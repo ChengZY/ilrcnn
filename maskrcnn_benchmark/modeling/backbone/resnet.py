@@ -152,6 +152,7 @@ class ResNet(nn.Module):
             if self.return_features[stage_name]:
                 outputs.append(x)
             backbone_features.append(x)
+
         return outputs, backbone_features
 
 

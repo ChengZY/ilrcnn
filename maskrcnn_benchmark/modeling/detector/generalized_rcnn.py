@@ -29,17 +29,19 @@ class GeneralizedRCNN(nn.Module):
         detections / masks from it.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, mean_model=None):
 
         super(GeneralizedRCNN, self).__init__()
-
+        self.cfg = cfg
         self.backbone = build_backbone(cfg)
         if not cfg.MODEL.RPN.EXTERNAL_PROPOSAL:
             print('generalized_rcnn.py | Do not use external proposals, so use RPN.')
             self.rpn = build_rpn(cfg, self.backbone.out_channels)
         else:
             print('generalized_rcnn.py | Use external proposals.')
-        self.roi_heads = build_roi_heads(cfg, self.backbone.out_channels)
+        self.roi_heads = build_roi_heads(cfg, self.backbone.out_channels, mean_model)
+        if cfg.MODEL.STORAGE_ENABLE:
+            self.roi_heads.box._original_init(self.backbone)
 
     def forward(self, images, targets=None):
         """
@@ -65,7 +67,12 @@ class GeneralizedRCNN(nn.Module):
 
         if self.roi_heads:
             # feature map, proposals, losses
-            x, result, detector_losses = self.roi_heads(features, proposals, targets)
+            if self.cfg.MODEL.STORAGE_ENABLE:
+                # sync backbone in proto_head.py for EMA to backbone_mean
+                self.roi_heads.box._original_init(self.backbone)
+                x, result, detector_losses = self.roi_heads(features, proposals, targets, images)
+            else:
+                x, result, detector_losses = self.roi_heads(features, proposals, targets)
 
         else:
             # RPN-only models don't have roi_heads
@@ -79,7 +86,7 @@ class GeneralizedRCNN(nn.Module):
             losses.update(proposal_losses)
             return losses, features, backbone_features, anchors, rpn_output
 
-        return result, features,
+        return result, features, backbone_features
 
     def use_external_proposals_edgeboxes(self, images, proposals, targets=None):
 

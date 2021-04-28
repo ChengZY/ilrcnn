@@ -21,11 +21,13 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         if cfg.MODEL.KEYPOINT_ON and cfg.MODEL.ROI_KEYPOINT_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             self.keypoint.feature_extractor = self.box.feature_extractor
 
-    def forward(self, features, proposals, targets=None):
+    def forward(self, features, proposals, targets=None, images=None):
         losses = {}
         # TODO rename x to roi_box_features, if it doesn't increase memory consumption
-
-        x, detections, loss_box = self.box(features, proposals, targets)
+        if self.cfg.MODEL.STORAGE_ENABLE:
+            x, detections, loss_box = self.box(features, proposals, targets, images)
+        else:
+            x, detections, loss_box = self.box(features, proposals, targets)
 
         losses.update(loss_box)
         if self.cfg.MODEL.MASK_ON:
@@ -68,7 +70,7 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         return class_logits
 
 
-def build_roi_heads(cfg, in_channels):
+def build_roi_heads(cfg, in_channels, mean_model=None):
     # individually create the heads, that will be combined together
     # afterwards
 
@@ -79,7 +81,7 @@ def build_roi_heads(cfg, in_channels):
         return []
 
     if cfg.MODEL.PROTO_ON:
-        roi_heads.append(("box", build_roi_proto_box_head(cfg, in_channels))) # have to overwrite "box" key in dict
+        roi_heads.append(("box", build_roi_proto_box_head(cfg, in_channels, mean_model))) # have to overwrite "box" key in dict
         if roi_heads:
             roi_heads = CombinedROIHeads(cfg, roi_heads)
         return roi_heads

@@ -24,12 +24,12 @@ set -x
 #     MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN $fpn_post_nms_top_n_train \
 #     SOLVER.IMS_PER_BATCH $ims_per_batch
 
-# python tools/train_first_step.py \
-#     --config-file $YML \
-#     MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN $fpn_post_nms_top_n_train \
-#     SOLVER.IMS_PER_BATCH $ims_per_batch
+python tools/train_first_step.py \
+    --config-file $YML \
+    MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN $fpn_post_nms_top_n_train \
+    SOLVER.IMS_PER_BATCH $ims_per_batch
 
 # python tools/trim_detectron_model.py \
 #    --config-file $YML
 
-python tools/train_incremental.py --src-file $SRC_YML --tat-file $TAT_YML
+# python tools/train_incremental.py --src-file $SRC_YML --tat-file $TAT_YML

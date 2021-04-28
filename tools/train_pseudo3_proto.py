@@ -33,7 +33,7 @@ from tensorboardX import SummaryWriter
 from maskrcnn_benchmark.distillation.distillation import calculate_rpn_distillation_loss
 from maskrcnn_benchmark.distillation.distillation import calculate_feature_distillation_loss
 from maskrcnn_benchmark.distillation.distillation import calculate_roi_distillation_losses
-
+from maskrcnn_benchmark.distillation.distillation import cal_layer_distillation_loss
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
 try:
@@ -45,10 +45,12 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 from torchvision.transforms import functional as F
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from tqdm import tqdm
+from maskrcnn_benchmark.data import make_dummy_data_loader  # import data set
 CATEGORIES = ["__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
             "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 def do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target):
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target, dummy_data_loader):
 
     # record log information
     logger = logging.getLogger("maskrcnn_benchmark_target_model.trainer")
@@ -63,6 +65,57 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
     average_distillation_loss = 0
     average_faster_rcnn_loss = 0
     average_contrast_loss = 0
+    average_layer_loss = 0
+    all_new_ratio = float(len(data_loader.dataset.datasets[0].old_classes)) / len(data_loader.dataset.datasets[0].new_classes)
+    print("=> total class/new class: ", all_new_ratio)
+
+    # find median confidence for each class
+    score_dicts = {}
+    median_dict = {}
+    BAD_THRESH = 0.3
+    print("=> Start to Find Median")
+    if dummy_data_loader is not None:
+        for it, (images, targets, _, idx) in enumerate(tqdm(dummy_data_loader)):
+            images = images.to(device)
+            targets = [target.to(device) for target in targets]
+            src_pred, _, _ = model_source(images)
+
+            for pred in src_pred:
+                pred_scores = pred.get_field("scores")
+                pred_labels = pred.get_field("labels")
+
+                unique_labels = torch.unique(pred_labels)
+                for x in unique_labels:
+                    sel = pred_labels == x
+                    sel_scores = pred_scores[sel].tolist()
+                    if x.item() in score_dicts.keys():
+                        score_dicts[x.item()].extend(sel_scores)
+                    else:
+                        print("Add class {} into dict".format(x.item()))
+                        score_dicts[x.item()] = sel_scores
+        print("=> Finish Find Median")
+        for x in score_dicts.keys():
+            newlist = list(filter(lambda x:x>BAD_THRESH, score_dicts[x]))
+            score_dicts[x] = newlist
+            print("{}: #{}, median: {:.2f}, mean: {:.2f}".format(x, len(newlist), np.median(newlist), np.mean(newlist)))
+            median_dict[x] = np.median(newlist)
+    """
+    3: #113, median: 0.75, mean: 0.71
+    10: #341, median: 0.72, mean: 0.69
+    12: #482, median: 0.73, mean: 0.71
+    13: #604, median: 0.87, mean: 0.75
+    9: #1958, median: 0.58, mean: 0.62
+    8: #112, median: 0.69, mean: 0.68
+    15: #492, median: 0.71, mean: 0.68
+    1: #162, median: 0.56, mean: 0.61
+    7: #879, median: 0.84, mean: 0.75
+    14: #588, median: 0.76, mean: 0.72
+    5: #452, median: 0.88, mean: 0.77
+    11: #654, median: 0.57, mean: 0.61
+    4: #267, median: 0.56, mean: 0.62
+    2: #571, median: 0.84, mean: 0.75
+    6: #518, median: 0.68, mean: 0.67
+    """
 
     for iteration, (images, targets, _, idx) in enumerate(data_loader, start_iter):
 
@@ -75,7 +128,7 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         targets = [target.to(device) for target in targets]  # move targets (labels) to the device
         # from ipdb import set_trace
         # source model prediction
-        src_pred = model_source(images)[0]
+        src_pred, _, backbone_feature_source = model_source(images)
         #### 添加pred到gt中 ####
         # per image
         for gt, pred in zip(targets, src_pred):
@@ -84,8 +137,16 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             targets: BoxList -> bbox, size, mode, extra_fields, difficult
             """
             pred_scores = pred.get_field("scores")
-            keep = torch.nonzero(pred_scores > cfg_target.MODEL.PSEUDO_CONF_THRESH).squeeze(1)
-            pred = pred[keep]
+            pred_labels = pred.get_field("labels")
+            if dummy_data_loader is not None:
+                median_list = [median_dict[x] for x in pred_labels.tolist()]
+                median_tensor = torch.tensor(median_list).to(device)
+                keep = pred_scores > median_tensor
+                # print("keep: {}/{}".format(keep.sum().item(), len(keep)))
+                pred = pred[keep]
+            else:
+                keep = torch.nonzero(pred_scores > cfg_target.MODEL.PSEUDO_CONF_THRESH).squeeze(1)
+                pred = pred[keep]
             
             with torch.no_grad():
                 if len(pred) > 0:
@@ -107,63 +168,20 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             gt.extra_fields['difficult'] = torch.cat([gt.extra_fields['difficult'], torch.zeros_like(pred_labels).to(torch.uint8)], dim=0)
             after_num = gt.bbox.shape[0]
             print("Box Number transformation: {} -> {}".format(before_num, after_num))
-        """
-        可视化预测和gt在图上【先合并再可视化】
-        """
-        # for k in range(images.tensors.shape[0]):
-        #     # transform from tensor-> array
-        #     cv2_img = F.normalize(images.tensors[k], mean=[-102.9801/1., -115.9465/1., -122.7717/1.], std=[1., 1., 1.])
-        #     cv2_img = np.array(cv2_img.permute(1,2,0).cpu()).astype(np.uint8)
-        #     h, w = cv2_img.shape[:-1]
-        #     print(cv2_img.shape)
-        #     # draw gt box on array
-        #     for j in range(targets[k].bbox.shape[0]): # travel each box in one img
-        #         bbox = targets[k].bbox[j].cpu()
-        #         cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)
+
         
-        #     cv2.imshow("VOC", cv2_img)
-        #     if cv2.waitKey(0) == 27: # 'ESC'
-        #         cv2.destroyAllWindows() 
-        #         exit(0)    
 
-        """
-        可视化预测和gt在图上【先可视化再合并】
-        # images: ImageList images.tensors.shape, images.image_sizes
-        for k in range(images.tensors.shape[0]):
-            # transform from tensor-> array
-            cv2_img = F.normalize(images.tensors[k], mean=[-102.9801/1., -115.9465/1., -122.7717/1.], std=[1., 1., 1.])
-            cv2_img = np.array(cv2_img.permute(1,2,0).cpu()).astype(np.uint8)
-            h, w = cv2_img.shape[:-1]
-            print(cv2_img.shape)
-            # draw gt box on array
-            for j in range(targets[k].bbox.shape[0]): # travel each box in one img
-                bbox = targets[k].bbox[j].cpu()
-                cv2.rectangle(cv2_img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)
-
-            ss = src_pred[k].get_field("scores")
-            keep = torch.nonzero(ss > 0.7).squeeze(1)
-            src_pred[k] = src_pred[k][keep]
-
-            src_score = src_pred[k].get_field("scores").tolist()
-            src_label = src_pred[k].get_field("labels").tolist()
-            src_bbox = src_pred[k].resize((w, h)).bbox.data.cpu()
-            src_catname = [CATEGORIES[i] for i in src_label]
-
-            s = "{}: {:.2f}"
-            # overlap src prediciton box
-            for m in range(src_bbox.shape[0]):
-                cv2.rectangle(cv2_img, (src_bbox[m][0], src_bbox[m][1]), (src_bbox[m][2], src_bbox[m][3]), (0,0,255), 2)
-                cv2.putText(cv2_img, s.format(src_catname[m], src_score[m]), (src_bbox[m][0], src_bbox[m][1]-5), cv2.FONT_HERSHEY_SIMPLEX, 1., (0,0,255), 1)
-            cv2.imshow("VOC", cv2_img)
-            if cv2.waitKey(0) == 27: # 'ESC'
-                cv2.destroyAllWindows() 
-                exit(0)
-        """ 
         loss_dict_target, feature_target, backbone_feature_target, anchor_target, rpn_output_target = model_target(images, targets)
         # faster_rcnn_losses = sum(loss for loss in loss_dict_target.values())  # summarise the losses for faster rcnn
         faster_rcnn_key = ['loss_classifier', 'loss_box_reg', 'loss_objectness', 'loss_rpn_box_reg']
         faster_rcnn_losses = sum(loss_dict_target[x] for x in faster_rcnn_key)  # summarise the losses for faster rcnn
         contrastive_losses = loss_dict_target['loss_contrast']
+
+        layer_distill_losses = 0.
+        if cfg_target.MODEL.LAYER_DISTILL:
+            # from ipdb import set_trace; set_trace()
+            layer_distill_losses = cal_layer_distillation_loss(
+                backbone_feature_source, backbone_feature_target, all_new_ratio, base_factor=cfg_target.MODEL.LAYER_FACTOR)
         """
         roi_distillation_losses, rpn_output_source, feature_source, backbone_feature_source, soften_result, soften_proposal, feature_proposals \
             = calculate_roi_distillation_losses(model_source, model_target, images)
@@ -181,9 +199,10 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
         # print('loss_dict_target: {0}'.format(loss_dict_target))
 
         # losses = (faster_rcnn_losses * 1 + distillation_losses * 19)/20
-        losses = faster_rcnn_losses + contrastive_losses #  + distillation_losses
+        losses = faster_rcnn_losses + contrastive_losses + layer_distill_losses
 
         # reduce losses over all GPUs for logging purposes
+        loss_dict_target['loss_distill'] = layer_distill_losses
         loss_dict_reduced = reduce_loss_dict(loss_dict_target)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
         meters.update(loss=losses_reduced, **loss_dict_reduced)
@@ -192,10 +211,12 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             # average_distillation_loss = (average_distillation_loss * (iteration - 1) + distillation_losses) / iteration
             average_faster_rcnn_loss = (average_faster_rcnn_loss * (iteration - 1) + faster_rcnn_losses) /iteration
             average_contrast_loss = (average_contrast_loss * (iteration - 1) + contrastive_losses) /iteration
+            average_layer_loss = (average_layer_loss * (iteration - 1) + layer_distill_losses) /iteration
         else:
             # average_distillation_loss = distillation_losses
             average_faster_rcnn_loss = faster_rcnn_losses
             average_contrast_loss = contrastive_losses
+            average_layer_loss = layer_distill_losses
 
         optimizer.zero_grad()  # clear the gradient cache
         # If mixed precision is not used, this ends up doing nothing, otherwise apply loss scaling for mixed-precision recipe.
@@ -222,14 +243,16 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
             loss_global_avg = meters.loss.global_avg
             loss_median = meters.loss.median
             # print('loss global average: {0}, loss median: {1}'.format(meters.loss.global_avg, meters.loss.median))
-            summary_writer.add_scalar('train_loss_global_avg', loss_global_avg, iteration)
+            summary_writer.add_scalar('avg/train_loss_global_avg', loss_global_avg, iteration)
             # summary_writer.add_scalar('train_loss_median', loss_median, iteration)
             # summary_writer.add_scalar('train_loss_raw', losses_reduced, iteration)
-            # summary_writer.add_scalar('distillation_losses_raw', distillation_losses, iteration)
-            # summary_writer.add_scalar('faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
+            summary_writer.add_scalar('raw/contrastive_losses_raw', contrastive_losses, iteration)
+            summary_writer.add_scalar('raw/faster_rcnn_losses_raw', faster_rcnn_losses, iteration)
+            summary_writer.add_scalar('raw/layer_losses_raw', layer_distill_losses, iteration)
             # summary_writer.add_scalar('distillation_losses_avg', average_distillation_loss, iteration)
-            summary_writer.add_scalar('faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
-            summary_writer.add_scalar('contrastive_losses_avg', average_contrast_loss, iteration)
+            summary_writer.add_scalar('avg/faster_rcnn_losses_avg', average_faster_rcnn_loss, iteration)
+            summary_writer.add_scalar('avg/contrastive_losses_avg', average_contrast_loss, iteration)
+            summary_writer.add_scalar('avg/layer_losses_avg', average_layer_loss, iteration)
         # Every time meets the checkpoint_period, save the target model (parameters)
         if iteration % checkpoint_period == 0:
             checkpointer_target.save("model_{:07d}".format(iteration), **arguments_target)
@@ -243,9 +266,18 @@ def do_train(model_source, model_target, data_loader, optimizer, scheduler, chec
 
 
 def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
-
+    
     model_source = build_detection_model(cfg_source)  # create the source model
+    # model_mean = build_detection_model(cfg_target)
+    # if cfg_target.MODEL.STORAGE_ENABLE:
+    #     model_target = build_detection_model(cfg_target, model_mean)
+    #     # copy student' parameters to meann student
+    #     for param_mean, param in zip(model_mean.parameters(), model_target.parameters()):
+    #         param_mean.data.copy_(param.data)
+    #         param_mean.requires_grad = False
+
     model_target = build_detection_model(cfg_target)  # create the target model
+    
     device = torch.device(cfg_source.MODEL.DEVICE)  # default is "cuda"
     model_target.to(device)  # move target model to gpu
     model_source.to(device)  # move source model to gpu
@@ -275,6 +307,7 @@ def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
     checkpointer_target = DetectronCheckpointer(cfg_target, model_target, optimizer=optimizer, scheduler=scheduler, save_dir=output_dir_target,
                                                 save_to_disk=save_to_disk, logger=logger_target)
     extra_checkpoint_data_target = checkpointer_target.load(cfg_target.MODEL.WEIGHT)
+
     # dict updating method to update the parameter dictionary for source model
     arguments_source.update(extra_checkpoint_data_source)
     # dict updating method to update the parameter dictionary for target model
@@ -282,13 +315,16 @@ def train(cfg_source, logger_source, cfg_target, logger_target, distributed):
     print('start iteration: {0}'.format(arguments_target["iteration"]))
     # load training data
     data_loader = make_data_loader(cfg_target, is_train=True, is_distributed=distributed, start_iter=arguments_target["iteration"])
+    dummy_data_loader = None
+    if cfg_target.MODEL.FIND_MEDIAN:
+        dummy_data_loader = make_dummy_data_loader(cfg_target, is_train=True, is_distributed=distributed)
     print('finish loading data')
     # number of iteration to store parameter value in pth file
     checkpoint_period = cfg_target.SOLVER.CHECKPOINT_PERIOD
 
     # train the model using overwrite function
     do_train(model_source, model_target, data_loader, optimizer, scheduler, checkpointer_source, checkpointer_target,
-             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target)
+             device, checkpoint_period, arguments_source, arguments_target, summary_writer, cfg_target, dummy_data_loader)
 
     return model_target
 
