@@ -1,8 +1,9 @@
 ## Installation
 
 ### Requirements:
-- PyTorch 1.0 from a nightly release. It **will not** work with 1.0 nor 1.0.1. Installation instructions can be found in https://pytorch.org/get-started/locally/
-- torchvision from master
+- Python3.5
+- PyTorch 1.1
+- torchvision 0.3.0
 - cocoapi
 - yacs
 - matplotlib
@@ -18,18 +19,21 @@
 # for that, check that `which conda`, `which pip` and `which python` points to the
 # right path. From a clean conda env, this is what you need to do
 
-conda create --name maskrcnn_benchmark -y
+conda create --name maskrcnn_benchmark python=3.5 -y
 conda activate maskrcnn_benchmark
 
 # this installs the right pip and dependencies for the fresh python
 conda install ipython pip
+
+# upgrade pip for opencv-python
+pip install --upgrade pip
 
 # maskrcnn_benchmark and coco api dependencies
 pip install ninja yacs cython matplotlib tqdm opencv-python
 
 # follow PyTorch installation in https://pytorch.org/get-started/locally/
 # we give the instructions for CUDA 9.0
-conda install -c pytorch pytorch-nightly torchvision cudatoolkit=9.0
+conda install pytorch==1.1.0 torchvision==0.3.0 cudatoolkit=9.0 -c pytorch
 
 export INSTALL_DIR=$PWD
 
@@ -50,6 +54,12 @@ cd $INSTALL_DIR
 git clone https://github.com/NVIDIA/apex.git
 cd apex
 python setup.py install --cuda_ext --cpp_ext
+
+# install PyTorch Detection
+# cd $INSTALL_DIR
+# git clone https://github.com/facebookresearch/maskrcnn-benchmark.git
+# cd maskrcnn-benchmark
+
 
 # install PyTorch Detection
 # cd $INSTALL_DIR
