@@ -57,6 +57,7 @@ _C.MODEL.LAYER_DISTILL = False
 _C.MODEL.LAYER_FACTOR = 0.01
 
 _C.MODEL.FIND_MEDIAN = False
+_C.MODEL.DATASET_FITER = False # filter the incremental data has old class
 # If the WEIGHT starts with a catalog://, like :R-50, the code will look for
 # the path in paths_catalog. Else, it will use it as the specified absolute
 # path

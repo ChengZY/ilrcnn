@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  # WEIGHT: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_new/first_step/model_final.pth"
+  # WEIGHT: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/19_1_new_split/first_step/model_final.pth"
   BACKBONE:
     CONV_BODY: "R-50-C4"
   RESNETS:
@@ -20,9 +20,10 @@ MODEL:
     POOLER_SAMPLING_RATIO: 0
     FEATURE_EXTRACTOR: "ResNet50Conv5ROIFeatureExtractor"
     PREDICTOR: "FastRCNNPredictor"
-    NUM_CLASSES: 11 # total classes : 10 + 1
-    SPLIT: '10+10'
+    NUM_CLASSES: 20 # 11 # total classes : 10 + 1
+    SPLIT: '19+1'
     INCREMENTAL: True
+  LAYER_DISTILL: True
 DATASETS:
   TRAIN: ("voc_2007_train", "voc_2007_val")
   TEST: ("voc_2007_test",)

@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  # WEIGHT: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source/model_trim_optimizer_iteration.pth"
+  # WEIGHT: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_new/first_step/model_trim_optimizer_iteration.pth"
   BACKBONE:
     CONV_BODY: "R-50-C4"
   RESNETS:

@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  # WEIGHT: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_new/first_step/model_final.pth"
+  # WEIGHT: "/data1/pbdata/data_zk/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_new/first_step/model_trim_optimizer_iteration.pth"
   BACKBONE:
     CONV_BODY: "R-50-C4"
   RESNETS:
@@ -20,9 +20,19 @@ MODEL:
     POOLER_SAMPLING_RATIO: 0
     FEATURE_EXTRACTOR: "ResNet50Conv5ROIFeatureExtractor"
     PREDICTOR: "FastRCNNPredictor"
-    NUM_CLASSES: 11 # total classes : 10 + 1
+    NUM_CLASSES: 21 # total classes : 20 + 1
     SPLIT: '10+10'
     INCREMENTAL: True
+  PROTO_ON: True # enable box + proto head
+  STORAGE_ENABLE: True # memory bank
+  HIDDEN_DIM: 512
+  QLEN: 32768
+  TEMPERATURE: 0.2
+  CONTRAST_IOU_THRES: 0.5
+  REWEIGHT_TYPE: 'none'
+  LAMB_CONTRAST: 0.5
+  PSEUDO_WEIGHT: 1.
+  FIND_MEDIAN: True
 DATASETS:
   TRAIN: ("voc_2007_train", "voc_2007_val")
   TEST: ("voc_2007_test",)
@@ -33,11 +43,11 @@ SOLVER:
   WEIGHT_DECAY: 0.0001
   GAMMA: 0.1  # learning rate decay
   STEPS: (30000,)
-  MAX_ITER: 3000 # number of iteration
+  MAX_ITER: 60000 # number of iteration
   CHECKPOINT_PERIOD: 2500 # number of iteration to generate check point
   IMS_PER_BATCH: 1 # number of images per batch
   MOMENTUM: 0.9
 TEST: # testing strategy
   IMS_PER_BATCH: 1 # number of images per batch
-# OUTPUT_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source" # path to store the result
-# TENSORBOARD_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10/source/tensorboard"
+# OUTPUT_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_pseudo3" # path to store the result
+# TENSORBOARD_DIR: "/home/zhengkai/Faster-ILOD/incremental_learning_ResNet50_C4/10_10_pseudo3/tensorboard"

@@ -83,7 +83,12 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         # do not use old data
         if self.is_train:  # training mode
             print('voc.py | in training mode')
-            self._load_img_from_NEW_cls_without_old_data()
+            if self.cfg.MODEL.DATASET_FITER:
+                print('voc.py | filter data with old instance')
+                self._load_img_from_NEW_cls_without_old_cls()
+            else:
+                print('voc.py | keep data with old instance')
+                self._load_img_from_NEW_cls_without_old_data()
         else:
             print('voc.py | in test mode')
             self._load_img_from_NEW_and_OLD_cls_without_old_data()
@@ -160,7 +165,7 @@ class PascalVOCDataset(torch.utils.data.Dataset):
             img_ids_per_category = []
             with open(self._imgsetpath % "{0}_{1}".format(incremental, self.image_set)) as f: # ./voc/VOC2007/ImageSets/Main/cat_train.txt
                 buff = f.readlines()
-                buff = [x.strip("\n") for x in buff]
+                buff = [x.strip("\n") for x in buff] # image list contains this category
 
             for i in range(len(buff)):
                 x = buff[i]
@@ -200,7 +205,86 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         #     cls = self.old_classes
         # from ipdb import set_trace; set_trace()
         self.class_to_ind = dict(zip(cls, range(len(cls))))
+
+    def _load_img_from_NEW_cls_without_old_cls(self):
+        """
+        根据yml中指定的new class data按照类别从class_train.txt中取，把图片id放到img_ids_per_category和ids中
+        + 仅载入含有new category的img
+        """
+        self.ids = []
+        for incremental in self.new_classes:  # read corresponding class images from the data set
+            img_ids_per_category = []
+            with open(self._imgsetpath % "{0}_{1}".format(incremental, self.image_set)) as f: # ./voc/VOC2007/ImageSets/Main/cat_train.txt
+                buff = f.readlines()
+                buff = [x.strip("\n") for x in buff] # image list contains this category
+
+            for i in range(len(buff)):
+                x = buff[i]
+                x = x.split(' ')
+                if x[1] == '-1':
+                    pass
+                elif x[2] == '0':  # include difficult level object
+                    if self.is_train:
+                        pass
+                    else: # 测试的时候才用difficult level的object
+                        img_ids_per_category.append(x[0])
+                        self.ids.append(x[0])
+                else:
+                    img_ids_per_category.append(x[0])
+                    self.ids.append(x[0])
+            # print('voc.py | load_img_from_NEW_cls_without_old_data | number of images in {0}_{1} set: {2}'.format(incremental, self.image_set, len(img_ids_per_category)))
+
+            # check for image ids repeating
+            # 由于是按照类别取的img id（一张图中可能存在两个object），会被多个class loop重复取，所以要去重
+            self.final_ids = []
+            for id in self.ids:
+                repeat_flag = False
+                for final_id in self.final_ids:
+                    if id == final_id:
+                        repeat_flag = True
+                        break
+                if not repeat_flag:
+                    self.final_ids.append(id)
+            # print('voc.py | load_img_from_NEW_cls_without_old_data | total used number of images in {0}: {1}'.format(self.image_set, len(self.final_ids)))
+
+        print('filter before | load_img_from_NEW_cls_without_old_cls | total used number of images in {0}: {1}'.format(
+            self.image_set, len(self.final_ids)))
+
+
+        no_old_cls_final_ids = []
+
+        # @zhengkai filter image has old instances
+        for i, img_id in enumerate(self.final_ids):
+            old_class_flag = False
+            anno = ET.parse(self._annopath % img_id).getroot()
+            for obj in anno.iter("object"):
+                difficult = int(obj.find("difficult").text) == 1
+                if not self.keep_difficult and difficult:
+                    continue
+                name = obj.find("name").text.lower().strip()
+                for old in self.old_classes:
+                    if name == old:
+                        old_class_flag = True
+                        break
+
+                if old_class_flag:
+                    break
+            
+            if not old_class_flag:
+                no_old_cls_final_ids.append(img_id)
         
+        self.final_ids = no_old_cls_final_ids
+        
+        # store image ids and class ids
+        self.id_to_img_map = {k: v for k, v in enumerate(self.final_ids)}
+        print('filter after | load_img_from_NEW_cls_without_old_cls | total used number of images in {0}: {1}'.format(
+            self.image_set, len(self.final_ids)))
+
+            
+        cls = self.CLASSES # PascalVOCDataset.CLASSES
+        self.class_to_ind = dict(zip(cls, range(len(cls))))
+
+
     def __getitem__(self, index):
         img_id = self.final_ids[index]
         img = Image.open(self._imgpath % img_id).convert("RGB")
